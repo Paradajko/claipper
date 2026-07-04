@@ -26,7 +26,7 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
   }, [activeIndex]);
 
   return (
-    <div className="relative mx-auto w-full max-w-[300px] shrink-0 md:max-w-[330px]">
+    <div className="relative mx-auto w-full max-w-[280px] shrink-0 md:max-w-[300px]">
       <div className="absolute -inset-3 rounded-[2rem] bg-emerald-400/20 blur-2xl" />
 
       <div className="relative aspect-[9/16] overflow-hidden rounded-[1.65rem] border border-emerald-400/20 bg-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85)]">
@@ -91,7 +91,7 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
         </div>
       </div>
 
-      <div className="absolute -bottom-6 left-1/2 z-30 flex -translate-x-1/2 gap-2">
+      <div className="mt-4 flex justify-center gap-2">
         {VIDEOS.map((_, index) => (
           <div
             key={index}

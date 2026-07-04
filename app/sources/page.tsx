@@ -6,7 +6,7 @@ export default async function SourcesPage() {
   const sources = await getSourceVideos();
 
   return (
-    <AppShell title="Source video library" eyebrow="Zdroje">
+    <AppShell title="Source video library" eyebrow="Sources">
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <Card>
           <div className="mb-5 flex items-center gap-2">
@@ -15,7 +15,7 @@ export default async function SourcesPage() {
           </div>
           {!isSupabaseConfigured ? (
             <p className="mb-4 rounded-md border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">
-              Demo mód: formulár začne ukladať po nastavení Supabase env premenných.
+              Demo mode: the form will start saving after Supabase environment variables are configured.
             </p>
           ) : null}
           <form action={createSourceVideo} className="grid gap-3">
@@ -34,7 +34,7 @@ export default async function SourcesPage() {
             <Textarea name="transcript" label="Transcript" />
             <Textarea name="notes" label="Notes" />
             <button className="mt-2 h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">
-              Uložiť zdroj
+              Save source
             </button>
           </form>
         </Card>
@@ -49,9 +49,9 @@ export default async function SourcesPage() {
                     {source.platform ? <Badge className="border-white/10 bg-white/5 text-slate-200">{source.platform}</Badge> : null}
                   </div>
                   <h2 className="text-xl font-semibold text-white">{source.title}</h2>
-                  <p className="mt-2 text-sm text-slate-400">{source.notes ?? "Bez poznámok."}</p>
+                  <p className="mt-2 text-sm text-slate-400">{source.notes ?? "No notes."}</p>
                   <p className="mt-3 text-sm text-slate-300">
-                    MyLaura: {source.mylaura_campaign_name ?? "bez referencie"}
+                    MyLaura: {source.mylaura_campaign_name ?? "No reference"}
                     {source.client_name ? ` · ${source.client_name}` : ""}
                   </p>
                 </div>

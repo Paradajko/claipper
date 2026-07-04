@@ -6,12 +6,11 @@ export const metadata: Metadata = {
     canonical: "https://claipper.com",
     languages: {
       en: "https://claipper.com",
-      sk: "https://claipper.com/sk",
       "x-default": "https://claipper.com"
     }
   }
 };
 
 export default function LandingPage() {
-  return <LandingClient locale="en" />;
+  return <LandingClient />;
 }

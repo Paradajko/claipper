@@ -31,11 +31,11 @@ export default async function SchedulePage() {
                 const clip = clipById.get(post.clip_id);
                 return (
                   <tr key={post.id} className="bg-white/[0.035]">
-                    <td className="rounded-l-md px-3 py-3 text-slate-200">{post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("sk-SK") : "bez dátumu"}</td>
+                    <td className="rounded-l-md px-3 py-3 text-slate-200">{post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("en-US") : "No date"}</td>
                     <td className="px-3 py-3 text-white">{post.platform}</td>
-                    <td className="px-3 py-3 text-slate-300">{post.target_account ?? "bez účtu"}</td>
+                    <td className="px-3 py-3 text-slate-300">{post.target_account ?? "No account"}</td>
                     <td className="px-3 py-3">
-                      {clip ? <Link href={`/clips/${clip.id}`} className="text-emerald-300 hover:text-emerald-200">{clip.title ?? "Untitled"}</Link> : "bez clipu"}
+                      {clip ? <Link href={`/clips/${clip.id}`} className="text-emerald-300 hover:text-emerald-200">{clip.title ?? "Untitled"}</Link> : "No clip"}
                     </td>
                     <td className="px-3 py-3"><Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{post.status}</Badge></td>
                     <td className="rounded-r-md px-3 py-3">

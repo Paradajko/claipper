@@ -8,51 +8,35 @@ import RequestAccessModal from "@/components/RequestAccessModal";
 import { Card } from "@/components/ui";
 
 const workflow = [
-  { icon: MousePointer2, title: "Vyber moment", text: "Ulož čas, zdroj, score a poznámku k tomu, prečo má pasáž potenciál." },
-  { icon: Sparkles, title: "Dolaď hook", text: "AI helper pomôže s hookom, captionom, hashtagmi a CTA v slovenčine." },
-  { icon: CalendarClock, title: "Naplánuj výstup", text: "Vidíš platformu, účet, post URL, stav publikovania a prvé performance čísla." }
+  { icon: MousePointer2, title: "Pick the moment", text: "Save the timestamp, source, score, and the reason a passage has clip potential." },
+  { icon: Sparkles, title: "Shape the angle", text: "Use AI support for hooks, captions, hashtags, and calls to action in one production flow." },
+  { icon: CalendarClock, title: "Plan the output", text: "Track platform, account, post URL, publishing status, and early performance signals." }
 ];
 
 const heroCopy = {
-  en: {
-    badge: "Clipping production workspace",
-    title: "You don't need to watch it all.",
-    subtitle:
-      "Claipper helps clippers scan long videos, find strong moments, generate hooks, and move from raw footage to ready-to-edit clips faster.",
-    primaryCta: "Request Early Access",
-    secondaryCta: "See how it works"
-  },
-  sk: {
-    badge: "Pracovný priestor pre klippera",
-    title: "Nemusíš pozerať celé video.",
-    subtitle:
-      "Claipper pomáha klipperom skenovať dlhé videá, nájsť silné momenty, generovať hooky a dostať sa z raw footage po ready-to-edit klipy rýchlejšie.",
-    primaryCta: "Požiadať o Early Access",
-    secondaryCta: "Ako to funguje"
-  }
+  badge: "Clipping production workspace",
+  title: "You don't need to watch it all.",
+  subtitle: "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
+  primaryCta: "Request Early Access",
+  secondaryCta: "See how it works"
 } as const;
 
-export default function LandingClient({ locale }: { locale: "en" | "sk" }) {
+export default function LandingClient() {
   const [requestAccessOpen, setRequestAccessOpen] = useState(false);
-  const homeHref = locale === "sk" ? "/sk" : "/";
 
   return (
     <main className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-10 grid-mask opacity-80" />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <Link href={homeHref} className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-400 text-slate-950 shadow-[0_0_30px_rgba(16,185,129,.45)]">
             <Workflow size={22} />
           </span>
           <span className="text-lg font-bold text-white">Claipper</span>
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-slate-300 sm:flex">
-          <a href="#ako-to-funguje" className="hover:text-white">Ako to funguje</a>
+          <a href="#how-it-works" className="hover:text-white">How it works</a>
           <a href="#mylaura" className="hover:text-white">MyLaura vs Claipper</a>
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <Link href="/" className="hover:text-white">🇬🇧 EN</Link>
-            <Link href="/sk" className="hover:text-white">🇸🇰 SK</Link>
-          </div>
           <button
             type="button"
             onClick={() => setRequestAccessOpen(true)}
@@ -63,34 +47,34 @@ export default function LandingClient({ locale }: { locale: "en" | "sk" }) {
         </nav>
       </header>
 
-      <Hero copy={heroCopy[locale]} onPrimaryCta={() => setRequestAccessOpen(true)} />
+      <Hero copy={heroCopy} onPrimaryCta={() => setRequestAccessOpen(true)} />
       <RequestAccessModal open={requestAccessOpen} onClose={() => setRequestAccessOpen(false)} />
 
       <section id="mylaura" className="border-y border-white/10 bg-white/[0.025]">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-20 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Rozdelenie rolí</p>
-            <h2 className="text-4xl font-semibold tracking-tight text-white">MyLaura spúšťa kampane. Claipper vyrába obsah.</h2>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Role split</p>
+            <h2 className="text-4xl font-semibold tracking-tight text-white">MyLaura runs campaigns. Claipper produces clips.</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <Clapperboard className="mb-4 text-emerald-300" />
               <h3 className="mb-3 text-xl font-semibold text-white">Claipper</h3>
-              <p className="text-sm leading-6 text-slate-300">Momenty, hooky, titulky, captiony, schedule a report. Interný pracovný priestor pre hlavného clippera.</p>
+              <p className="text-sm leading-6 text-slate-300">Moments, hooks, subtitles, captions, scheduling, and reporting. A production workspace for the lead clipper.</p>
             </Card>
             <Card>
               <Captions className="mb-4 text-slate-300" />
               <h3 className="mb-3 text-xl font-semibold text-white">MyLaura</h3>
-              <p className="text-sm leading-6 text-slate-300">Kampane, klienti, tracking a payouts. V Claipperi zostáva len názov a URL ako referencia.</p>
+              <p className="text-sm leading-6 text-slate-300">Campaigns, clients, tracking, and payouts. Claipper keeps the campaign name and URL only as production references.</p>
             </Card>
           </div>
         </div>
       </section>
 
-      <section id="ako-to-funguje" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
         <div className="mb-10 max-w-2xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Workflow</p>
-          <h2 className="text-4xl font-semibold tracking-tight text-white">Produkčný tok od zdroja po výkon.</h2>
+          <h2 className="text-4xl font-semibold tracking-tight text-white">A production flow from source footage to performance.</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {workflow.map((item) => (

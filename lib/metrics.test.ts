@@ -70,7 +70,7 @@ describe("metrics", () => {
     expect(metrics.scheduledPosts).toBe(1);
     expect(metrics.publishedPosts).toBe(1);
     expect(metrics.totalViews).toBe(1200);
-    expect(metrics.todaysTasks[0]).toEqual({ label: "Publikovať", detail: "TikTok · @one" });
+    expect(metrics.todaysTasks[0]).toEqual({ label: "Publish", detail: "TikTok · @one" });
   });
 
   it("orders top clips by post views, then score", () => {

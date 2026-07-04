@@ -16,17 +16,17 @@ const requestSchema = z.object({
 });
 
 const actionLabels: Record<z.infer<typeof requestSchema>["action"], string> = {
-  "generate-hooks": "Navrhni 5 silných slovenských hookov pre krátke video.",
-  "improve-hook": "Vylepši existujúci hook tak, aby bol kratší, konkrétnejší a mal lepší prvý úder.",
-  "generate-caption": "Napíš slovenský caption pre short, ktorý pridá kontext a motivuje k uloženiu alebo komentáru.",
-  "generate-hashtags": "Navrhni slovenské a anglické hashtagy pre short, bez preháňania a bez spam efektu.",
-  "generate-cta": "Navrhni 5 krátkych CTA viet pre short."
+  "generate-hooks": "Suggest 5 strong hooks for a short-form video.",
+  "improve-hook": "Improve the existing hook so it is shorter, sharper, and stronger in the first beat.",
+  "generate-caption": "Write a caption for a short-form video that adds context and motivates saving or commenting.",
+  "generate-hashtags": "Suggest English hashtags for a short-form video without exaggeration or spam.",
+  "generate-cta": "Suggest 5 short CTA lines for a short-form video."
 };
 
 export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: "Neplatná požiadavka." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       {
         role: "system",
         content:
-          "Si slovenský clipping producer. Pomáhaš s hookmi, captionmi, hashtagmi a CTA pre short-form video. Claipper nie je kampaňový ani payout systém; MyLaura polia sú len referencie."
+          "You are a clipping producer. Help with hooks, captions, hashtags, and CTAs for short-form video. Claipper is not a campaign or payout system; MyLaura fields are references only."
       },
       {
         role: "user",
@@ -60,13 +60,13 @@ export async function POST(request: Request) {
 function demoAiResponse(action: z.infer<typeof requestSchema>["action"]) {
   if (action === "generate-hooks") {
     return [
-      "1. Tento moment rozhodne, či short prežije prvé tri sekundy.",
-      "2. Väčšina clipperov strihá video. Ty potrebuješ vyrobiť dôvod zostať.",
-      "3. Toto je pasáž, z ktorej vznikne viac než jeden short.",
-      "4. Ak hook nepracuje okamžite, caption ho už nezachráni.",
-      "5. Najlepší clip začína tam, kde sa mení energia."
+      "1. This moment decides whether the short survives the first three seconds.",
+      "2. Most clippers cut video. You need to create a reason to stay.",
+      "3. This is the passage that can become more than one short.",
+      "4. If the hook does not work immediately, the caption cannot save it.",
+      "5. The best clip starts where the energy changes."
     ].join("\n");
   }
 
-  return "Demo odpoveď: doplň OPENAI_API_KEY a Claipper bude generovať ostré slovenské návrhy priamo cez OpenAI.";
+  return "Demo response: add OPENAI_API_KEY and Claipper will generate sharp production suggestions through OpenAI.";
 }

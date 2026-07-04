@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 const RequestSchema = z.object({
-  email: z.string().email("Neplatný email"),
+  email: z.string().email("Invalid email"),
   name: z.string().optional(),
   use_case: z.enum(["tiktok", "podcast", "youtube-shorts", "instagram-reels", "other"]),
   videos_per_week: z.enum(["1-5", "5-10", "10+"]),
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest | Request) {
 
     const parsed = RequestSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Neplatné dáta", details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: "Invalid data", details: parsed.error.flatten() }, { status: 400 });
     }
 
     const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest | Request) {
 
     if (error) {
       console.error("Supabase insert error:", error);
-      return NextResponse.json({ error: "Uloženie zlyhalo" }, { status: 500 });
+      return NextResponse.json({ error: "Save failed" }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, id: data.id });

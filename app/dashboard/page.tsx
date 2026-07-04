@@ -12,7 +12,7 @@ export default async function DashboardPage() {
     { label: "Source videos", value: metrics.sourceVideosCount, icon: Film },
     { label: "Scheduled posts", value: metrics.scheduledPosts, icon: CalendarClock },
     { label: "Published posts", value: metrics.publishedPosts, icon: CheckCircle2 },
-    { label: "Total views", value: metrics.totalViews.toLocaleString("sk-SK"), icon: Eye }
+    { label: "Total views", value: metrics.totalViews.toLocaleString("en-US"), icon: Eye }
   ];
 
   return (
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400">Dnes nie sú naplánované urgentné úlohy.</p>
+              <p className="text-sm text-slate-400">No urgent tasks scheduled for today.</p>
             )}
           </div>
         </Card>

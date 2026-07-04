@@ -18,7 +18,7 @@ const defaultCopy: HeroCopy = {
   badge: "Clipping production workspace",
   title: "You don't need to watch it all.",
   subtitle:
-    "Claipper helps clippers scan long videos, find strong moments, generate hooks, and move from raw footage to ready-to-edit clips faster.",
+    "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
   primaryCta: "Get Clips",
   secondaryCta: "See how it works"
 };
@@ -66,7 +66,7 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
             </Link>
           )}
           <Link
-            href="#ako-to-funguje"
+            href="#how-it-works"
             className="inline-flex h-11 items-center justify-center rounded-md border border-white/15 bg-white/5 px-5 text-sm font-semibold text-white transition hover:border-emerald-400/40 hover:bg-emerald-400/10"
           >
             {copy.secondaryCta}
@@ -74,16 +74,9 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
         </div>
       </div>
 
-      <div className="relative isolate mx-auto w-full max-w-[780px] lg:mr-0">
+      <div className="relative isolate mx-auto w-full max-w-[820px] lg:mr-0">
         <div className="absolute -inset-6 rounded-[2.25rem] bg-emerald-400/10 blur-3xl" />
-        <div className="relative rounded-[2rem] border border-emerald-400/15 bg-slate-950/70 p-4 shadow-[0_34px_110px_-34px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-5">
-          <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2 font-mono text-xs text-slate-400">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.7)]" />
-              <span className="truncate">claipper.ai/moment-scan</span>
-            </div>
-            <span className="text-xs font-semibold text-slate-500">AI scan</span>
-          </div>
+        <div className="relative overflow-hidden rounded-[2rem] border border-emerald-400/15 bg-slate-950/70 p-4 shadow-[0_34px_110px_-34px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-5">
           <div className="flex items-center justify-center gap-5">
             <HeroPhone activeIndex={activeIndex} />
             <AiScannerPanel activeIndex={activeIndex} />

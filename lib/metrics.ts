@@ -34,9 +34,9 @@ export function getDashboardMetrics(
     publishedPosts: posts.filter((post) => post.status === "posted" || post.published_at).length,
     totalViews: posts.reduce((sum, post) => sum + (post.views ?? 0), 0),
     todaysTasks: [
-      ...todaysPosts.map((post) => ({ label: "Publikovať", detail: `${post.platform} · ${post.target_account ?? "bez účtu"}` })),
-      ...readyClips.slice(0, 3).map((clip) => ({ label: "Naplánovať clip", detail: clip.title ?? "Bez názvu" })),
-      ...editingClips.slice(0, 3).map((clip) => ({ label: "Dokončiť edit", detail: clip.title ?? "Bez názvu" }))
+      ...todaysPosts.map((post) => ({ label: "Publish", detail: `${post.platform} · ${post.target_account ?? "No account"}` })),
+      ...readyClips.slice(0, 3).map((clip) => ({ label: "Schedule clip", detail: clip.title ?? "Untitled" })),
+      ...editingClips.slice(0, 3).map((clip) => ({ label: "Finish edit", detail: clip.title ?? "Untitled" }))
     ].slice(0, 6)
   };
 }

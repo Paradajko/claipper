@@ -34,10 +34,10 @@ export default function SettingsPage() {
         <Card>
           <h2 className="mb-5 text-lg font-semibold text-white">Basic preferences</h2>
           <div className="space-y-4 text-sm text-slate-300">
-            <p>Jazyk: Slovak first</p>
-            <p>Domain later: claipper.com/sk</p>
+            <p>Language: English only</p>
+            <p>Primary domain: claipper.com</p>
             <p>Data mode: {isSupabaseConfigured ? "Supabase connected" : "Demo fallback"}</p>
-            <p>Manual scope: video rendering, auto-upload a MyLaura campaign/payout logic sú mimo tejto verzie.</p>
+            <p>Manual scope: video rendering, auto-upload, and MyLaura campaign/payout logic are outside this version.</p>
           </div>
         </Card>
       </div>

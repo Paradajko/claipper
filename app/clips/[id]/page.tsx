@@ -15,7 +15,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
     <AppShell title={clip.title ?? "Clip detail"} eyebrow="Production workspace">
       <div className="mb-5">
         <Link href="/clips" className="inline-flex items-center gap-2 text-sm text-emerald-300">
-          <ArrowLeft size={16} /> Späť na board
+          <ArrowLeft size={16} /> Back to board
         </Link>
       </div>
 
@@ -30,12 +30,12 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
             <div className="grid gap-4 sm:grid-cols-3">
               <Metric label="Timestamp" value={`${formatSeconds(clip.start_seconds)} - ${formatSeconds(clip.end_seconds)}`} />
               <Metric label="Duration" value={`${clip.duration_seconds ?? 0}s`} />
-              <Metric label="MyLaura ref" value={clip.mylaura_campaign_name ?? "bez referencie"} />
+              <Metric label="MyLaura ref" value={clip.mylaura_campaign_name ?? "No reference"} />
             </div>
           </Card>
 
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-white">Editácia clipu</h2>
+            <h2 className="mb-4 text-lg font-semibold text-white">Clip editing</h2>
             <form action={updateClipDetails} className="grid gap-4">
               <input type="hidden" name="id" value={clip.id} />
               <Textarea name="hook" label="Hook" defaultValue={clip.hook ?? ""} />
@@ -44,7 +44,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
               <Textarea name="cta" label="CTA" defaultValue={clip.cta ?? ""} />
               <Input name="exported_video_url" label="Exported video URL" defaultValue={clip.exported_video_url ?? ""} />
               <Textarea name="notes" label="Edit notes" defaultValue={clip.notes ?? ""} />
-              <button className="h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">Uložiť zmeny</button>
+              <button className="h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">Save changes</button>
             </form>
           </Card>
         </div>
@@ -76,9 +76,9 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
                       <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{post.status}</Badge>
                     </div>
                     <p className="mt-2 flex items-center gap-2 text-sm text-slate-400">
-                      <Clock size={15} /> {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("sk-SK") : "bez dátumu"}
+                      <Clock size={15} /> {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("en-US") : "No date"}
                     </p>
-                    <p className="mt-2 text-sm text-slate-300">{post.views.toLocaleString("sk-SK")} views · {post.likes} likes · {post.comments} comments</p>
+                    <p className="mt-2 text-sm text-slate-300">{post.views.toLocaleString("en-US")} views · {post.likes} likes · {post.comments} comments</p>
                     {post.post_url ? (
                       <a href={post.post_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-emerald-300">
                         Post URL <ExternalLink size={15} />
@@ -87,7 +87,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-400">Clip zatiaľ nemá naplánované posty.</p>
+                <p className="text-sm text-slate-400">This clip has no scheduled posts yet.</p>
               )}
             </div>
           </Card>

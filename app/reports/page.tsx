@@ -25,7 +25,7 @@ export default async function ReportsPage() {
         </Card>
         <Card>
           <p className="text-sm text-slate-400">Total views</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{totalViews.toLocaleString("sk-SK")}</p>
+          <p className="mt-2 text-3xl font-semibold text-white">{totalViews.toLocaleString("en-US")}</p>
         </Card>
       </div>
 
@@ -39,7 +39,7 @@ export default async function ReportsPage() {
             {topClips.map((clip) => (
               <Link key={clip.id} href={`/clips/${clip.id}`} className="block rounded-md border border-white/10 bg-white/[0.035] p-4 hover:border-emerald-400/30">
                 <p className="font-medium text-white">{clip.title ?? "Untitled clip"}</p>
-                <p className="mt-2 text-sm text-slate-400">{clip.hook ?? "Bez hooku"}</p>
+                <p className="mt-2 text-sm text-slate-400">{clip.hook ?? "No hook yet"}</p>
               </Link>
             ))}
           </div>
@@ -55,7 +55,7 @@ export default async function ReportsPage() {
               <div key={platform.platform} className="rounded-md border border-white/10 bg-white/[0.035] p-4">
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-white">{platform.platform}</p>
-                  <p className="text-sm text-emerald-200">{platform.views.toLocaleString("sk-SK")} views</p>
+                  <p className="text-sm text-emerald-200">{platform.views.toLocaleString("en-US")} views</p>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                   <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(8, Math.min(100, totalViews ? (platform.views / totalViews) * 100 : 8))}%` }} />
@@ -87,9 +87,9 @@ export default async function ReportsPage() {
             <h2 className="text-lg font-semibold text-white">Recommendations for next clips</h2>
           </div>
           <ul className="space-y-3 text-sm leading-6 text-slate-300">
-            <li>Vyrob viac variantov z momentov so score nad 85, najmä ak majú jasný kontrast v prvých troch sekundách.</li>
-            <li>Pri ready clipoch doplň platform-specific caption pred plánovaním, aby report vedel porovnať angle.</li>
-            <li>Najbližší batch zaraď podľa hook typu: insight, teardown, tip, strategy.</li>
+            <li>Create more variants from moments scoring above 85, especially when the first three seconds have clear contrast.</li>
+            <li>Add platform-specific captions to ready clips before scheduling so reporting can compare angles.</li>
+            <li>Sort the next batch by hook type: insight, teardown, tip, or strategy.</li>
           </ul>
         </Card>
       </div>

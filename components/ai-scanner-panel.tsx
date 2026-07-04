@@ -28,53 +28,13 @@ const CLIP_CARDS = [
 
 const PROCESS_STEPS = ["Raw footage", "Moments detected", "Clip ideas", "Ready to edit"] as const;
 
-const FLOATING_BADGES = [
-  { label: "Hook generated", className: "-right-5 top-16", delay: 0.25 },
-  { label: "Caption ready", className: "-left-7 top-36", delay: 0.55 },
-  { label: "Best moment found", className: "-right-7 bottom-40", delay: 0.85 },
-  { label: "14 clip ideas", className: "-left-4 bottom-20", delay: 1.15 },
-  { label: "Ready to edit", className: "right-12 -bottom-4", delay: 1.45 }
-] as const;
-
 export default function AiScannerPanel({ activeIndex }: { activeIndex: number }) {
   const moments = MOMENTS_BY_INDEX[activeIndex] ?? MOMENTS_BY_INDEX[0];
   const clipCard = CLIP_CARDS[activeIndex] ?? CLIP_CARDS[0];
 
   return (
-    <div className="relative hidden h-[560px] w-[340px] shrink-0 flex-col rounded-[1.35rem] border border-emerald-400/20 bg-slate-950/75 p-4 backdrop-blur-md md:flex">
-      {FLOATING_BADGES.map((badge) => (
-        <motion.div
-          key={badge.label}
-          className={`absolute z-20 rounded-full border border-emerald-400/25 bg-slate-950/85 px-3 py-1.5 text-[11px] font-medium text-emerald-200 shadow-[0_12px_40px_rgba(0,0,0,.35)] backdrop-blur ${badge.className}`}
-          initial={{ opacity: 0, y: 8, scale: 0.96 }}
-          animate={{ opacity: 1, y: [0, -4, 0], scale: 1 }}
-          transition={{
-            opacity: { delay: badge.delay, duration: 0.35 },
-            scale: { delay: badge.delay, duration: 0.35 },
-            y: { delay: badge.delay, duration: 4.8, repeat: Infinity, ease: "easeInOut" }
-          }}
-        >
-          {badge.label}
-        </motion.div>
-      ))}
-
-      <div className="mb-4 flex items-start justify-between border-b border-white/10 pb-4">
-        <div>
-          <p className="text-sm font-semibold text-white">AI Moment Scanner</p>
-          <p className="mt-1 text-xs text-slate-500">Scanning long-form footage</p>
-        </div>
-        <motion.div
-          key={activeIndex}
-          className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-mono text-[10px] text-emerald-200"
-          initial={{ opacity: 0.6 }}
-          animate={{ opacity: [0.6, 1, 0.75] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-        >
-          scanning
-        </motion.div>
-      </div>
-
-      <div className="mb-4 grid gap-2">
+    <div className="hidden h-[520px] w-[340px] shrink-0 flex-col overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-slate-950/75 p-4 backdrop-blur-md md:flex">
+      <div className="mb-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
         {PROCESS_STEPS.map((step, index) => (
           <motion.div
             key={`${activeIndex}-${step}`}
@@ -98,7 +58,7 @@ export default function AiScannerPanel({ activeIndex }: { activeIndex: number })
         {moments.map((moment, index) => (
           <motion.div
             key={`${activeIndex}-${moment.time}`}
-            className="rounded-xl border border-white/10 bg-white/[0.035] p-3"
+            className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 + index * 0.55, duration: 0.35, ease: "easeOut" }}
@@ -117,7 +77,7 @@ export default function AiScannerPanel({ activeIndex }: { activeIndex: number })
 
       <motion.div
         key={`clip-${activeIndex}`}
-        className="mt-auto rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-4"
+        className="mt-auto rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3.5"
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 2.25, duration: 0.4, ease: "easeOut" }}
