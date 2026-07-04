@@ -33,7 +33,7 @@ export default function AiScannerPanel({ activeIndex }: { activeIndex: number })
   const clipCard = CLIP_CARDS[activeIndex] ?? CLIP_CARDS[0];
 
   return (
-    <div className="hidden h-[500px] w-[340px] shrink-0 flex-col overflow-hidden rounded-[1.35rem] border border-emerald-400/20 bg-slate-950/75 p-3.5 backdrop-blur-md md:flex">
+    <div className="hidden h-[560px] w-[340px] shrink-0 flex-col rounded-[1.35rem] border border-emerald-400/20 bg-slate-950/75 p-3.5 backdrop-blur-md md:flex">
       <div className="mb-3 grid gap-1.5 rounded-2xl border border-white/10 bg-white/[0.025] p-2.5">
         {PROCESS_STEPS.map((step, index) => (
           <motion.div
@@ -77,8 +77,8 @@ export default function AiScannerPanel({ activeIndex }: { activeIndex: number })
 
       <motion.div
         key={`clip-${activeIndex}`}
-        className="mt-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3"
-        initial={{ opacity: 0, y: 18 }}
+        className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3"
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 2.25, duration: 0.4, ease: "easeOut" }}
       >
