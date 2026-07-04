@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, CalendarClock, Captions, Clapperboard, MousePointer2, Sparkles, Workflow } from "lucide-react";
-import { Badge, ButtonLink, Card } from "@/components/ui";
+import { CalendarClock, Captions, Clapperboard, MousePointer2, Sparkles, Workflow } from "lucide-react";
+import Hero from "@/components/hero";
+import { Card } from "@/components/ui";
 
 const workflow = [
   { icon: MousePointer2, title: "Vyber moment", text: "Ulož čas, zdroj, score a poznámku k tomu, prečo má pasáž potenciál." },
@@ -27,44 +27,7 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      <section className="mx-auto grid min-h-[calc(100vh-82px)] max-w-7xl items-center gap-10 px-4 pb-12 pt-8 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-        <div className="max-w-2xl">
-          <Badge className="mb-5 border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Clipping production workspace</Badge>
-          <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight text-white sm:text-6xl lg:text-7xl">
-            Od dlhého videa po hotový short bez chaosu.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-            Claipper pomáha hlavnému clipperovi riadiť celý proces tvorby shortov — od výberu momentov cez hooky a captiony až po harmonogram a report výkonu.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <ButtonLink href="/dashboard">
-              Otvoriť dashboard <ArrowRight size={17} />
-            </ButtonLink>
-            <ButtonLink href="#ako-to-funguje" variant="secondary">
-              Ako to funguje
-            </ButtonLink>
-          </div>
-          <div className="mt-8 grid max-w-xl grid-cols-3 gap-3 text-sm text-slate-300">
-            {["momenty", "hooky", "report výkonu"].map((item) => (
-              <div key={item} className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-3">
-                <BadgeCheck className="mb-2 text-emerald-300" size={17} />
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative">
-          <div className="absolute -inset-4 rounded-[32px] bg-emerald-400/10 blur-3xl" />
-          <Image
-            src="/images/claipper-dashboard-mockup.png"
-            alt="Claipper dashboard mockup"
-            width={1536}
-            height={1024}
-            priority
-            className="relative rounded-lg border border-emerald-300/20 shadow-glow"
-          />
-        </div>
-      </section>
+      <Hero />
 
       <section id="mylaura" className="border-y border-white/10 bg-white/[0.025]">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-20 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
