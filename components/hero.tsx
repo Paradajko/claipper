@@ -17,8 +17,8 @@ const defaultCopy: HeroCopy = {
   title: "You don't need to watch it all.",
   subtitle:
     "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
-  primaryCta: "Get Clips",
-  secondaryCta: "See how it works"
+  primaryCta: "Find Moments",
+  secondaryCta: "See Workflow"
 };
 
 const CLIP_COUNT = 3;
@@ -46,15 +46,15 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
             <button
               type="button"
               onClick={onPrimaryCta}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-300 via-emerald-300 to-emerald-400 px-6 text-sm font-semibold text-slate-950 shadow-[0_0_34px_rgba(16,185,129,.32)] transition hover:-translate-y-0.5 hover:shadow-[0_0_42px_rgba(34,211,238,.34)]"
             >
               {copy.primaryCta}
               <ArrowRight size={17} />
             </button>
           ) : (
             <Link
-              href="/dashboard"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+              href="/app"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-300 via-emerald-300 to-emerald-400 px-6 text-sm font-semibold text-slate-950 shadow-[0_0_34px_rgba(16,185,129,.32)] transition hover:-translate-y-0.5 hover:shadow-[0_0_42px_rgba(34,211,238,.34)]"
             >
               {copy.primaryCta}
               <ArrowRight size={17} />
@@ -62,7 +62,7 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
           )}
           <Link
             href="#how-it-works"
-            className="inline-flex h-11 items-center justify-center rounded-md border border-white/15 bg-white/5 px-5 text-sm font-semibold text-white transition hover:border-emerald-400/40 hover:bg-emerald-400/10"
+            className="inline-flex h-12 items-center justify-center rounded-lg border border-white/15 bg-slate-950/35 px-6 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.05)] transition hover:border-emerald-300/45 hover:bg-emerald-400/10 hover:shadow-[0_0_28px_rgba(16,185,129,.16)]"
           >
             {copy.secondaryCta}
           </Link>

@@ -58,12 +58,12 @@ export function ButtonLink({
 }
 
 const navItems: Array<{ href: string; label: string; icon: LucideIcon }> = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/sources", label: "Zdroje", icon: Library },
-  { href: "/clips", label: "Clips", icon: Clapperboard },
-  { href: "/schedule", label: "Schedule", icon: CalendarClock },
-  { href: "/reports", label: "Reporty", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings }
+  { href: "/app", label: "Dashboard", icon: Home },
+  { href: "/app/sources", label: "Zdroje", icon: Library },
+  { href: "/app/clips", label: "Clips", icon: Clapperboard },
+  { href: "/app/schedule", label: "Schedule", icon: CalendarClock },
+  { href: "/app/reports", label: "Reporty", icon: BarChart3 },
+  { href: "/app/settings", label: "Settings", icon: Settings }
 ];
 
 export function AppShell({ children, title, eyebrow }: { children: React.ReactNode; title: string; eyebrow?: string }) {

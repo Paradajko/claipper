@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, BarChart3, CalendarClock, Check, FileText, Gauge, MousePointer2, Sparkles, UserRound } from "lucide-react";
 import Hero from "@/components/hero";
-import RequestAccessModal from "@/components/RequestAccessModal";
 import { Card } from "@/components/ui";
 
 const workflow = [
@@ -18,8 +16,8 @@ const workflow = [
 const heroCopy = {
   title: "You don't need to watch it all.",
   subtitle: "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
-  primaryCta: "Get Clips",
-  secondaryCta: "See how it works"
+  primaryCta: "Find Moments",
+  secondaryCta: "See Workflow"
 } as const;
 
 function ClaipperClipVisual() {
@@ -79,8 +77,6 @@ function ClaipperClipVisual() {
 }
 
 export default function LandingClient() {
-  const [requestAccessOpen, setRequestAccessOpen] = useState(false);
-
   return (
     <main className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-10 grid-mask opacity-80" />
@@ -92,23 +88,22 @@ export default function LandingClient() {
             width={900}
             height={220}
             priority
-            className="h-10 w-auto max-w-[170px] object-contain"
+            className="h-14 w-auto max-w-[230px] object-contain sm:h-16"
           />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-slate-300 sm:flex">
+          <a href="#how-it-works" className="transition hover:text-white">How it works</a>
           <a href="#mylaura" className="transition hover:text-white">MyLaura x Claipper</a>
-          <button
-            type="button"
-            onClick={() => setRequestAccessOpen(true)}
-            className="rounded-md border border-emerald-400/30 px-4 py-2 text-emerald-200 transition hover:bg-emerald-400/10"
+          <Link
+            href="/app"
+            className="rounded-md border border-emerald-400/35 bg-emerald-400/[0.04] px-4 py-2 text-sm font-semibold text-emerald-100 shadow-[0_0_22px_rgba(16,185,129,.12)] transition hover:border-emerald-300/60 hover:bg-emerald-400/10 hover:shadow-[0_0_28px_rgba(16,185,129,.2)]"
           >
-            Get Clips
-          </button>
+            Open App
+          </Link>
         </nav>
       </header>
 
-      <Hero copy={heroCopy} onPrimaryCta={() => setRequestAccessOpen(true)} />
-      <RequestAccessModal open={requestAccessOpen} onClose={() => setRequestAccessOpen(false)} />
+      <Hero copy={heroCopy} />
 
       <section id="mylaura" className="border-y border-white/10 bg-white/[0.025]">
         <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
@@ -199,7 +194,7 @@ export default function LandingClient() {
                   ["ready-to-edit outputs", Check]
                 ].map(([label, Icon]) => (
                   <li key={label as string} className="flex items-center gap-3">
-                    <Icon className="h-4 w-4 text-cyan-300" />
+                    <Icon className="h-4 w-4 text-emerald-300" />
                     <span>{label as string}</span>
                   </li>
                 ))}

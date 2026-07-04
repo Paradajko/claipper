@@ -4,7 +4,7 @@ import { setAuthCookie } from "@/lib/auth";
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/dashboard");
+  const next = String(formData.get("next") ?? "/app");
 
   if (!process.env.APP_PASSWORD || password === process.env.APP_PASSWORD) {
     await setAuthCookie(password);

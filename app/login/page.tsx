@@ -17,7 +17,7 @@ export default async function LoginPage({
         <h1 className="text-2xl font-semibold text-white">Claipper access</h1>
         <p className="mt-2 text-sm text-slate-400">Simple internal password through APP_PASSWORD.</p>
         <form action="/api/login" method="post" className="mt-6 space-y-4">
-          <input type="hidden" name="next" value={params.next ?? "/dashboard"} />
+          <input type="hidden" name="next" value={params.next ?? "/app"} />
           <input
             name="password"
             type="password"
@@ -26,7 +26,7 @@ export default async function LoginPage({
           />
           {params.error ? <p className="text-sm text-rose-200">Incorrect password.</p> : null}
           <button className="h-11 w-full rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">
-            Open dashboard
+            Open App
           </button>
         </form>
       </Card>

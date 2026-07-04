@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("MyLaura x Claipper landing cards", () => {
   const source = readFileSync("components/landing-client.tsx", "utf8");
+  const heroSource = readFileSync("components/hero.tsx", "utf8");
 
   it("uses the simplified clip production structure for the Claipper card", () => {
     expect(source).toContain("Clip production workspace");
@@ -15,5 +16,23 @@ describe("MyLaura x Claipper landing cards", () => {
     expect(source).not.toContain("Clips ready from Laura&apos;s brief");
     expect(source).not.toContain("Laura brief received");
     expect(source).not.toContain("clips ready</p>");
+  });
+
+  it("uses the requested public landing navigation and CTA copy", () => {
+    expect(source).toContain('href="#how-it-works"');
+    expect(source).toContain('href="#mylaura"');
+    expect(source).toContain('href="/app"');
+    expect(source).toContain("Open App");
+    expect(source).not.toContain("Get Clips");
+
+    expect(heroSource).toContain("Find Moments");
+    expect(heroSource).toContain("See Workflow");
+    expect(heroSource).toContain("from-cyan-300");
+    expect(heroSource).toContain("to-emerald-400");
+  });
+
+  it("keeps the Claipper card benefit icons green", () => {
+    expect(source).toContain("text-emerald-300");
+    expect(source).not.toContain('Icon className="h-4 w-4 text-cyan-300"');
   });
 });

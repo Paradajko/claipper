@@ -89,7 +89,7 @@ export async function createSourceVideo(formData: FormData) {
   "use server";
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) redirect("/sources?demo=1");
+  if (!supabase) redirect("/app/sources?demo=1");
 
   const duration = Number(formData.get("duration_seconds"));
   const payload = {
@@ -108,23 +108,23 @@ export async function createSourceVideo(formData: FormData) {
   const { error } = await supabase.from("source_videos").insert(payload);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/sources");
-  revalidatePath("/dashboard");
-  redirect("/sources");
+  revalidatePath("/app/sources");
+  revalidatePath("/app");
+  redirect("/app/sources");
 }
 
 export async function updateClipStatus(clipId: string, status: ClipStatus) {
   "use server";
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) redirect(`/clips/${clipId}?demo=1`);
+  if (!supabase) redirect(`/app/clips/${clipId}?demo=1`);
 
   const { error } = await supabase.from("clips").update({ status }).eq("id", clipId);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/clips");
-  revalidatePath(`/clips/${clipId}`);
-  revalidatePath("/dashboard");
+  revalidatePath("/app/clips");
+  revalidatePath(`/app/clips/${clipId}`);
+  revalidatePath("/app");
 }
 
 export async function updateClipDetails(formData: FormData) {
@@ -132,7 +132,7 @@ export async function updateClipDetails(formData: FormData) {
 
   const clipId = String(formData.get("id"));
   const supabase = getSupabaseAdmin();
-  if (!supabase) redirect(`/clips/${clipId}?demo=1`);
+  if (!supabase) redirect(`/app/clips/${clipId}?demo=1`);
 
   const payload = {
     hook: valueOrNull(formData.get("hook")),
@@ -146,9 +146,9 @@ export async function updateClipDetails(formData: FormData) {
   const { error } = await supabase.from("clips").update(payload).eq("id", clipId);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/clips");
-  revalidatePath(`/clips/${clipId}`);
-  redirect(`/clips/${clipId}`);
+  revalidatePath("/app/clips");
+  revalidatePath(`/app/clips/${clipId}`);
+  redirect(`/app/clips/${clipId}`);
 }
 
 function valueOrNull(value: FormDataEntryValue | null) {
