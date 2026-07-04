@@ -135,8 +135,8 @@ export default function LandingClient() {
                   alt="MyLaura"
                   width={577}
                   height={176}
-                  sizes="330px"
-                  className="h-auto w-[min(330px,100%)] object-contain object-left"
+                  sizes="260px"
+                  className="h-auto w-[min(260px,100%)] object-contain object-left"
                 />
               </div>
               <h3 className="mt-2 text-2xl font-semibold text-white">Campaign intelligence</h3>

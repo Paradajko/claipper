@@ -42,4 +42,9 @@ describe("MyLaura x Claipper landing cards", () => {
     expect(source).toContain("height={176}");
     expect(source).not.toContain("width={1304}");
   });
+
+  it("renders the MyLaura logo at the same visual scale as the Claipper logo", () => {
+    expect(source).toContain('sizes="260px"');
+    expect(source).toContain("w-[min(260px,100%)]");
+  });
 });
