@@ -60,3 +60,15 @@ a {
   background: linear-gradient(to bottom, transparent, #10b981, transparent);
   box-shadow: 0 0 20px rgba(16, 185, 129, 0.75);
 }
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

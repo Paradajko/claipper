@@ -27,7 +27,7 @@ const stages = [
   { value: "01:00:00", label: "RAW FOOTAGE", accessory: "bar" },
   { value: "38 moments", label: "DETECTED", accessory: "dot" },
   { value: "14 clip ideas", label: "SUGGESTED", accessory: "sparkle" },
-  { value: "6 ✓", label: "READY TO EDIT", accessory: "check" }
+  { value: "Early access", label: "AVAILABLE SOON", accessory: "check" }
 ] as const;
 
 const floatingBadges = [
@@ -35,10 +35,10 @@ const floatingBadges = [
   { label: "Caption ready", icon: CheckCircle2, className: "left-2 top-28 sm:-left-12 sm:top-32", delay: 2.2 },
   { label: "Best moment: 00:14:32", icon: Clock, className: "right-0 bottom-20 sm:-right-16 sm:bottom-24", delay: 2.4 },
   { label: "Score: 91%", icon: TrendingUp, className: "left-1 bottom-36 sm:-left-8 sm:bottom-40", delay: 2.6 },
-  { label: "Ready to edit", icon: Scissors, className: "right-1 top-1/2 sm:-right-20", delay: 2.8 }
+  { label: "Available in early access", icon: Scissors, className: "right-1 top-1/2 sm:-right-20", delay: 2.8 }
 ] as const;
 
-export default function Hero({ copy = defaultCopy }: { copy?: HeroCopy }) {
+export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: HeroCopy; onPrimaryCta?: () => void }) {
   const shouldReduceMotion = useReducedMotion();
 
   const containerVariants: Variants | undefined = shouldReduceMotion
@@ -81,13 +81,24 @@ export default function Hero({ copy = defaultCopy }: { copy?: HeroCopy }) {
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">{copy.subtitle}</p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
-          >
-            {copy.primaryCta}
-            <ArrowRight size={17} />
-          </Link>
+          {onPrimaryCta ? (
+            <button
+              type="button"
+              onClick={onPrimaryCta}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+            >
+              {copy.primaryCta}
+              <ArrowRight size={17} />
+            </button>
+          ) : (
+            <Link
+              href="/dashboard"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+            >
+              {copy.primaryCta}
+              <ArrowRight size={17} />
+            </Link>
+          )}
           <Link
             href="#ako-to-funguje"
             className="inline-flex h-11 items-center justify-center rounded-md border border-white/15 bg-white/5 px-5 text-sm font-semibold text-white transition hover:border-emerald-400/40 hover:bg-emerald-400/10"
