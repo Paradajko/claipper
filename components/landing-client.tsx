@@ -133,8 +133,8 @@ export default function LandingClient() {
                 <Image
                   src="/images/my-laura-logo-dark-bg.png"
                   alt="MyLaura"
-                  width={1304}
-                  height={252}
+                  width={577}
+                  height={176}
                   sizes="330px"
                   className="h-auto w-[min(330px,100%)] object-contain object-left"
                 />

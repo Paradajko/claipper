@@ -35,4 +35,11 @@ describe("MyLaura x Claipper landing cards", () => {
     expect(source).toContain("text-emerald-300");
     expect(source).not.toContain('Icon className="h-4 w-4 text-cyan-300"');
   });
+
+  it("uses the cropped MyLaura logo asset so left alignment is real", () => {
+    expect(source).toContain('src="/images/my-laura-logo-dark-bg.png"');
+    expect(source).toContain("width={577}");
+    expect(source).toContain("height={176}");
+    expect(source).not.toContain("width={1304}");
+  });
 });
