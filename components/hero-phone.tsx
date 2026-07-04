@@ -67,12 +67,12 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
       <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3">
         <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-slate-500">
           <span>00:00</span>
-          <div className="relative h-3 flex-1">
+          <div className="relative h-4 flex-1">
             <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-slate-700" />
             {[18, 43, 58, 82].map((position, index) => (
               <motion.span
                 key={`${activeIndex}-${position}`}
-                className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
+                className="absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
                 style={{ left: `${position}%` }}
                 initial={{ opacity: 0, scale: 0.4 }}
                 animate={{ opacity: 1, scale: [0.4, 1.35, 1] }}
@@ -91,13 +91,13 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
         </div>
       </div>
 
-      <div className="mt-4 flex justify-center gap-2">
+      <div className="mt-4 flex justify-center gap-1.5">
         {VIDEOS.map((_, index) => (
           <div
             key={index}
-            className={`h-1.5 w-1.5 rounded-full transition-colors duration-300 ${
+            className={`h-1.5 rounded-full transition-all duration-300 ${
               index === activeIndex ? "bg-emerald-400" : "bg-white/30"
-            }`}
+            } ${index === activeIndex ? "w-6" : "w-3"}`}
           />
         ))}
       </div>

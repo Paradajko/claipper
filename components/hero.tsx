@@ -7,7 +7,6 @@ import AiScannerPanel from "@/components/ai-scanner-panel";
 import HeroPhone from "@/components/hero-phone";
 
 type HeroCopy = {
-  badge: string;
   title: string;
   subtitle: string;
   primaryCta: string;
@@ -15,7 +14,6 @@ type HeroCopy = {
 };
 
 const defaultCopy: HeroCopy = {
-  badge: "Clipping production workspace",
   title: "You don't need to watch it all.",
   subtitle:
     "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
@@ -39,11 +37,8 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
   return (
     <section className="mx-auto grid min-h-[calc(100vh-82px)] max-w-7xl items-center gap-10 px-4 pb-12 pt-8 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8">
       <div className="max-w-2xl">
-        <span className="mb-5 inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200">
-          {copy.badge}
-        </span>
         <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight text-white sm:text-6xl lg:text-7xl">
-          {copy.title}
+          You <span className="text-emerald-400">don&apos;t</span> need to <span className="text-emerald-400">watch</span> it all.
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">{copy.subtitle}</p>
         <div className="mt-8 flex flex-wrap gap-3">

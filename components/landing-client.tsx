@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CalendarClock, Captions, Clapperboard, MousePointer2, Sparkles, Workflow } from "lucide-react";
+import { CalendarClock, Captions, Clapperboard, MousePointer2, Sparkles } from "lucide-react";
 import Hero from "@/components/hero";
 import RequestAccessModal from "@/components/RequestAccessModal";
 import { Card } from "@/components/ui";
@@ -14,10 +14,9 @@ const workflow = [
 ];
 
 const heroCopy = {
-  badge: "Clipping production workspace",
   title: "You don't need to watch it all.",
   subtitle: "Find the strongest moments in long videos and turn them into clip ideas without scrubbing through hours of footage.",
-  primaryCta: "Request Early Access",
+  primaryCta: "Get Clips",
   secondaryCta: "See how it works"
 } as const;
 
@@ -28,21 +27,16 @@ export default function LandingClient() {
     <main className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-10 grid-mask opacity-80" />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-400 text-slate-950 shadow-[0_0_30px_rgba(16,185,129,.45)]">
-            <Workflow size={22} />
-          </span>
-          <span className="text-lg font-bold text-white">Claipper</span>
+        <Link href="/" className="text-lg font-bold text-white">
+          cl<span className="text-emerald-400">AI</span>pper
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-slate-300 sm:flex">
-          <a href="#how-it-works" className="hover:text-white">How it works</a>
-          <a href="#mylaura" className="hover:text-white">MyLaura vs Claipper</a>
           <button
             type="button"
             onClick={() => setRequestAccessOpen(true)}
             className="rounded-md border border-emerald-400/30 px-4 py-2 text-emerald-200 transition hover:bg-emerald-400/10"
           >
-            Request Access
+            Get Clips
           </button>
         </nav>
       </header>
