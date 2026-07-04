@@ -6,4 +6,5 @@ node_modules
 coverage
 dist
 .vercel
+supabase/.temp
 *.tsbuildinfo

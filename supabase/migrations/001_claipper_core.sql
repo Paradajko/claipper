@@ -60,3 +60,36 @@ create index if not exists clips_status_idx on clips(status);
 create index if not exists clips_source_video_id_idx on clips(source_video_id);
 create index if not exists scheduled_posts_clip_id_idx on scheduled_posts(clip_id);
 create index if not exists scheduled_posts_scheduled_at_idx on scheduled_posts(scheduled_at);
+
+create table if not exists access_requests (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  email text not null,
+  name text,
+  use_case text,
+  videos_per_week text,
+  how_did_you_hear text,
+  status text default 'pending',
+  notes text
+);
+
+create index if not exists access_requests_status_idx on access_requests(status);
+create index if not exists access_requests_email_idx on access_requests(email);
+
+alter table source_videos enable row level security;
+alter table clips enable row level security;
+alter table scheduled_posts enable row level security;
+alter table access_requests enable row level security;
+
+drop policy if exists "service_role_all_source_videos" on source_videos;
+drop policy if exists "service_role_all_clips" on clips;
+drop policy if exists "service_role_all_scheduled_posts" on scheduled_posts;
+drop policy if exists "service_role_all_access_requests" on access_requests;
+drop policy if exists "anon_insert_access_requests" on access_requests;
+
+create policy "service_role_all_source_videos" on source_videos for all to service_role using (true) with check (true);
+create policy "service_role_all_clips" on clips for all to service_role using (true) with check (true);
+create policy "service_role_all_scheduled_posts" on scheduled_posts for all to service_role using (true) with check (true);
+create policy "service_role_all_access_requests" on access_requests for all to service_role using (true) with check (true);
+
+create policy "anon_insert_access_requests" on access_requests for insert to anon with check (true);
