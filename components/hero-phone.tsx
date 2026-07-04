@@ -68,11 +68,11 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
         <div className="flex items-center justify-between gap-3 font-mono text-[10px] text-slate-500">
           <span>00:00</span>
           <div className="relative h-4 flex-1">
-            <div className="absolute left-0 top-1/2 z-20 h-px w-full -translate-y-1/2 bg-slate-700" />
+            <div className="absolute left-0 top-[8px] h-px w-full -translate-y-1/2 bg-slate-700" />
             {[18, 43, 58, 82].map((position, index) => (
               <motion.span
                 key={`${activeIndex}-${position}`}
-                className="absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
+                className="absolute top-[8px] z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
                 style={{ left: `${position}%` }}
                 initial={{ opacity: 0, scale: 0.4 }}
                 animate={{ opacity: 1, scale: [0.4, 1.35, 1] }}
@@ -81,7 +81,7 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
             ))}
             <motion.div
               key={`progress-${activeIndex}`}
-              className="absolute left-0 top-1/2 z-30 h-px -translate-y-1/2 bg-emerald-400/70"
+              className="absolute left-0 top-[8px] z-20 h-px -translate-y-1/2 bg-emerald-400/70"
               initial={{ width: "0%" }}
               animate={{ width: "100%" }}
               transition={{ duration: 5.6, ease: "linear" }}
