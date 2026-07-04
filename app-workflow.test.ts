@@ -19,10 +19,27 @@ describe("AI-first app workflow naming", () => {
   it("frames the dashboard around the AI clipping workflow", () => {
     const dashboard = read("app/app/page.tsx");
 
-    expect(dashboard).toContain("MyLaura Brief → Content Lab → Clips → Schedule → Reports");
-    expect(dashboard).toContain("Clip from MyLaura Brief");
-    expect(dashboard).toContain("Clip any content");
+    expect(dashboard).toContain("Start with context. Finish with clips.");
+    expect(dashboard).toContain("Brief / Content");
+    expect(dashboard).toContain("AI Analysis");
+    expect(dashboard).toContain("Clip Ideas");
+    expect(dashboard).toContain("Production");
+    expect(dashboard).toContain("Reports");
+    expect(dashboard).toContain("Start with MyLaura Brief");
+    expect(dashboard).toContain("Start with Content");
+    expect(dashboard).toContain("Goal found");
+    expect(dashboard).toContain("Tone found");
+    expect(dashboard).toContain("CTA found");
+    expect(dashboard).toContain("Angles ready");
+    expect(dashboard).toContain("Video source");
+    expect(dashboard).toContain("Transcript");
+    expect(dashboard).toContain("Moments found");
+    expect(dashboard).toContain("Content Runs");
+    expect(dashboard).toContain("Ready Clips");
+    expect(dashboard).toContain("Recent analyses");
+    expect(dashboard).toContain("No analyses yet.");
     expect(dashboard).not.toContain("Operator dashboard");
+    expect(dashboard).not.toContain("MyLaura Brief → Content Lab → Clips → Schedule → Reports");
   });
 
   it("keeps Content Lab simple and AI-first", () => {
