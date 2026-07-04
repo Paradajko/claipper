@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, CalendarClock, Captions, Clapperboard, FileText, Gauge, MousePointer2, Sparkles, UserRound, Workflow } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarClock, FileText, Gauge, MousePointer2, Sparkles, UserRound, Workflow } from "lucide-react";
 import Hero from "@/components/hero";
 import RequestAccessModal from "@/components/RequestAccessModal";
 import { Card } from "@/components/ui";
@@ -77,8 +77,8 @@ export default function LandingClient() {
                   alt="MyLaura"
                   width={1304}
                   height={252}
-                  sizes="240px"
-                  className="h-10 w-auto rounded-sm bg-white px-2 py-1"
+                  sizes="280px"
+                  className="h-14 w-auto"
                 />
                 <h3 className="mt-2 text-2xl font-semibold text-white">Campaign intelligence</h3>
               </div>
@@ -116,87 +116,52 @@ export default function LandingClient() {
             </div>
 
             <div className="rounded-2xl border border-emerald-400/15 bg-slate-950/70 p-5 shadow-[0_24px_80px_-35px_rgba(0,0,0,.95)]">
-              <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.035] p-4">
-                <div className="mb-4 flex items-center justify-between">
+              <div className="rounded-xl border border-white/10 bg-white/[0.035] p-5">
+                <div className="mb-8 flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Claipper</p>
-                    <h3 className="mt-2 text-2xl font-semibold text-white">Clip production workspace</h3>
+                    <h3 className="mt-2 text-2xl font-semibold text-white">Clips ready from Laura&apos;s brief</h3>
                   </div>
                   <Workflow className="text-emerald-300" />
                 </div>
-                <div className="grid gap-3">
-                  <motion.div
-                    className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3 shadow-[0_0_26px_rgba(16,185,129,.08)]"
-                    animate={{ borderColor: ["rgba(16,185,129,.22)", "rgba(16,185,129,.48)", "rgba(16,185,129,.22)"] }}
-                    transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-                  >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Brief from Laura</p>
-                    <div className="mt-2 grid gap-1.5 text-xs text-slate-300">
-                      <p><span className="text-slate-500">Goal:</span> Awareness</p>
-                      <p><span className="text-slate-500">Audience:</span> SK/CZ creators</p>
-                      <p><span className="text-slate-500">Tone:</span> Fast, funny, direct</p>
-                    </div>
-                  </motion.div>
 
-                  <div className="relative flex items-center justify-between overflow-hidden rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] font-semibold text-slate-300">
-                    <motion.span
-                      className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent"
-                      animate={{ x: [-72, 360] }}
-                      transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <span>Campaign context</span>
-                    <ArrowRight className="h-4 w-4 text-emerald-300" />
-                    <span>Clip angles</span>
+                <div className="mx-auto max-w-sm">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/65 p-5 text-center">
+                    <p className="text-sm font-semibold text-white">Laura brief received</p>
+                    <div className="relative mx-auto my-5 h-16 w-px bg-slate-700">
+                      <motion.span
+                        className="absolute left-1/2 top-0 h-8 w-px -translate-x-1/2 bg-emerald-300 shadow-[0_0_20px_rgba(16,185,129,.85)]"
+                        animate={{ y: [0, 34, 0], opacity: [0.45, 1, 0.45] }}
+                        transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                      <ArrowRight className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-90 text-emerald-300" />
+                    </div>
+                    <p className="text-sm font-semibold text-emerald-200">Clips ready</p>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {["Funny reaction hook", "Creator POV moment", "Problem -> solution"].map((angle, index) => (
-                      <motion.div
-                        key={angle}
-                        className="rounded-lg border border-white/10 bg-slate-950/60 p-2.5 text-xs font-medium leading-5 text-white"
-                        initial={false}
-                        animate={{ opacity: [0.55, 1, 1, 0.75], y: [6, 0, 0, 0] }}
-                        transition={{ delay: 1.15 + index * 0.35, duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    {["Hooks ready", "Captions ready", "Schedule ready"].map((label, index) => (
+                      <motion.span
+                        key={label}
+                        className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-200"
+                        animate={{ opacity: [0.45, 1, 1], y: [5, 0, 0] }}
+                        transition={{ delay: index * 0.35, duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
                       >
-                        {angle}
-                      </motion.div>
+                        {label}
+                      </motion.span>
                     ))}
                   </div>
 
                   <motion.div
-                    className="rounded-xl border border-emerald-400/30 bg-emerald-400/[0.08] p-3"
-                    animate={{ boxShadow: ["0 0 0 rgba(16,185,129,0)", "0 0 28px rgba(16,185,129,.18)", "0 0 0 rgba(16,185,129,0)"] }}
-                    transition={{ delay: 2.4, duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                    className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.08] p-6 text-center"
+                    animate={{ boxShadow: ["0 0 0 rgba(16,185,129,0)", "0 0 34px rgba(16,185,129,.18)", "0 0 0 rgba(16,185,129,0)"] }}
+                    transition={{ delay: 1.4, duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Production queue ready</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      {[
-                        ["8", "clips to edit"],
-                        ["4", "captions ready"],
-                        ["3", "posts scheduled"]
-                      ].map(([value, label]) => (
-                        <div key={label} className="rounded-lg border border-white/10 bg-slate-950/55 px-2 py-2">
-                          <p className="font-mono text-lg font-semibold text-white">{value}</p>
-                          <p className="mt-1 text-[10px] leading-3 text-slate-400">{label}</p>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="font-mono text-5xl font-semibold text-white">8</p>
+                    <p className="mt-2 text-sm font-semibold uppercase tracking-[0.2em] text-emerald-300">clips ready</p>
                   </motion.div>
                 </div>
               </div>
-              <ul className="grid gap-3 text-sm text-slate-300">
-                {[
-                  ["clip angles", Clapperboard],
-                  ["hooks & captions", Captions],
-                  ["production tasks", Workflow],
-                  ["scheduled outputs", CalendarClock]
-                ].map(([label, Icon]) => (
-                  <li key={label as string} className="flex items-center gap-3">
-                    <Icon className="h-4 w-4 text-emerald-300" />
-                    <span>{label as string}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </div>
