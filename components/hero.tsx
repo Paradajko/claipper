@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import AiScannerPanel from "@/components/ai-scanner-panel";
 import HeroPhone from "@/components/hero-phone";
-import LiveChat from "@/components/live-chat";
 
 type HeroCopy = {
   badge: string;
@@ -23,28 +23,15 @@ const defaultCopy: HeroCopy = {
   secondaryCta: "See how it works"
 };
 
-const INITIAL_LIKES = [124_310, 82_470, 241_820];
+const CLIP_COUNT = 3;
 
 export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: HeroCopy; onPrimaryCta?: () => void }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [likesCount, setLikesCount] = useState(INITIAL_LIKES[0]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      setActiveIndex((previous) => {
-        const next = (previous + 1) % INITIAL_LIKES.length;
-        setLikesCount(INITIAL_LIKES[next]);
-        return next;
-      });
+      setActiveIndex((previous) => (previous + 1) % CLIP_COUNT);
     }, 6000);
-
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setLikesCount((previous) => previous + Math.floor(Math.random() * 17 + 4));
-    }, 1800);
 
     return () => window.clearInterval(interval);
   }, []);
@@ -93,13 +80,13 @@ export default function Hero({ copy = defaultCopy, onPrimaryCta }: { copy?: Hero
           <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
             <div className="flex min-w-0 items-center gap-2 font-mono text-xs text-slate-400">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.7)]" />
-              <span className="truncate">claipper.ai/live-preview</span>
+              <span className="truncate">claipper.ai/moment-scan</span>
             </div>
-            <span className="text-xs font-semibold text-slate-500">early access</span>
+            <span className="text-xs font-semibold text-slate-500">AI scan</span>
           </div>
           <div className="flex items-center justify-center gap-5">
             <HeroPhone activeIndex={activeIndex} />
-            <LiveChat activeIndex={activeIndex} likesCount={likesCount} />
+            <AiScannerPanel activeIndex={activeIndex} />
           </div>
         </div>
       </div>
