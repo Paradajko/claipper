@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarClock, Captions, Clapperboard, MousePointer2, Sparkles, Workflow } from "lucide-react";
 import Hero from "@/components/hero";
@@ -10,23 +9,21 @@ const workflow = [
   { icon: CalendarClock, title: "Naplánuj výstup", text: "Vidíš platformu, účet, post URL, stav publikovania a prvé performance čísla." }
 ];
 
-export const metadata: Metadata = {
-  alternates: {
-    canonical: "https://claipper.com",
-    languages: {
-      en: "https://claipper.com",
-      sk: "https://claipper.com/sk",
-      "x-default": "https://claipper.com"
-    }
-  }
+const slovakHeroCopy = {
+  badge: "Pracovný priestor pre klippera",
+  title: "Nemusíš pozerať celé video.",
+  subtitle:
+    "Claipper pomáha klipperom skenovať dlhé videá, nájsť silné momenty, generovať hooky a dostať sa z raw footage po ready-to-edit klipy rýchlejšie.",
+  primaryCta: "Získať klipy",
+  secondaryCta: "Ako to funguje"
 };
 
-export default function LandingPage() {
+export default function SlovakLandingPage() {
   return (
     <main className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-10 grid-mask opacity-80" />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-3">
+        <Link href="/sk" className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-400 text-slate-950 shadow-[0_0_30px_rgba(16,185,129,.45)]">
             <Workflow size={22} />
           </span>
@@ -43,7 +40,7 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      <Hero />
+      <Hero copy={slovakHeroCopy} />
 
       <section id="mylaura" className="border-y border-white/10 bg-white/[0.025]">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-20 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8">
