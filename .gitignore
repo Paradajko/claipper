@@ -8,3 +8,4 @@ dist
 .vercel
 supabase/.temp
 *.tsbuildinfo
+.app-password-production.txt
