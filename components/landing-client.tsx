@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, BarChart3, CalendarClock, Captions, Clapperboard, FileText, Gauge, MousePointer2, ScanSearch, Sparkles, UserRound, Workflow } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarClock, Captions, Clapperboard, FileText, Gauge, MousePointer2, Sparkles, UserRound, Workflow } from "lucide-react";
 import Hero from "@/components/hero";
 import RequestAccessModal from "@/components/RequestAccessModal";
 import { Card } from "@/components/ui";
@@ -53,7 +53,7 @@ export default function LandingClient() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Connected workflow</p>
             <h2 className="text-4xl font-semibold tracking-tight text-white">MyLaura x Claipper</h2>
             <p className="mt-4 text-lg leading-8 text-slate-300">
-              Laura plans the campaign. Claipper turns that context into clip execution.
+              Laura plans the campaign. Claipper gets the clips ready.
             </p>
           </div>
 
@@ -72,10 +72,14 @@ export default function LandingClient() {
                 />
               </div>
               <div>
-                <div className="inline-flex items-baseline gap-1 text-2xl font-bold tracking-tight text-white">
-                  <span>Laura</span>
-                  <span className="text-emerald-400">AI</span>
-                </div>
+                <Image
+                  src="/images/my-laura-logo.png"
+                  alt="MyLaura"
+                  width={1304}
+                  height={252}
+                  sizes="240px"
+                  className="h-10 w-auto rounded-sm bg-white px-2 py-1"
+                />
                 <h3 className="mt-2 text-2xl font-semibold text-white">Campaign intelligence</h3>
               </div>
               <ul className="mt-6 grid gap-3 text-sm text-slate-300">
@@ -94,7 +98,17 @@ export default function LandingClient() {
             </div>
 
             <div className="hidden items-center justify-center px-2 lg:flex">
-              <div className="flex min-w-44 items-center gap-3 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-200 shadow-[0_0_32px_rgba(16,185,129,.12)]">
+              <div className="relative flex min-w-44 items-center gap-3 overflow-hidden rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-semibold text-emerald-200 shadow-[0_0_32px_rgba(16,185,129,.12)]">
+                <motion.span
+                  className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent"
+                  animate={{ x: [-64, 220] }}
+                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <motion.span
+                  className="absolute inset-0 rounded-full border border-emerald-300/20"
+                  animate={{ opacity: [0.25, 0.7, 0.25], boxShadow: ["0 0 0 rgba(16,185,129,0)", "0 0 26px rgba(16,185,129,.22)", "0 0 0 rgba(16,185,129,0)"] }}
+                  transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                />
                 <span>Campaign context</span>
                 <ArrowRight className="h-4 w-4" />
                 <span>Clip execution</span>
@@ -110,71 +124,72 @@ export default function LandingClient() {
                   </div>
                   <Workflow className="text-emerald-300" />
                 </div>
-                <div className="grid items-center gap-4 sm:grid-cols-[0.78fr_1fr]">
-                  <div className="relative mx-auto aspect-[9/16] w-full max-w-[150px] overflow-hidden rounded-2xl border border-emerald-400/20 bg-slate-950 shadow-[0_0_50px_rgba(16,185,129,.12)]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_48%_26%,rgba(148,163,184,.24),transparent_21%),radial-gradient(circle_at_39%_36%,rgba(16,185,129,.18),transparent_18%),radial-gradient(circle_at_58%_58%,rgba(34,211,238,.12),transparent_24%),linear-gradient(160deg,#020617,#07111f_48%,#020617)]" />
-                    <div className="absolute left-[30%] top-[22%] h-24 w-16 rounded-full bg-slate-200/10 blur-xl" />
-                    <div className="absolute bottom-[30%] right-[18%] h-28 w-4 rotate-12 rounded-full bg-emerald-300/12 blur-sm" />
-                    <div className="absolute bottom-11 left-4 right-4 rounded-md bg-black/35 px-2 py-1 text-center text-[9px] font-medium leading-4 text-slate-200 backdrop-blur">
-                      “that line changes the whole clip”
+                <div className="grid gap-3">
+                  <motion.div
+                    className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] p-3 shadow-[0_0_26px_rgba(16,185,129,.08)]"
+                    animate={{ borderColor: ["rgba(16,185,129,.22)", "rgba(16,185,129,.48)", "rgba(16,185,129,.22)"] }}
+                    transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Brief from Laura</p>
+                    <div className="mt-2 grid gap-1.5 text-xs text-slate-300">
+                      <p><span className="text-slate-500">Goal:</span> Awareness</p>
+                      <p><span className="text-slate-500">Audience:</span> SK/CZ creators</p>
+                      <p><span className="text-slate-500">Tone:</span> Fast, funny, direct</p>
                     </div>
-                    <div className="absolute bottom-5 left-4 right-4 h-1 overflow-hidden rounded-full bg-white/10">
+                  </motion.div>
+
+                  <div className="relative flex items-center justify-between overflow-hidden rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-[11px] font-semibold text-slate-300">
+                    <motion.span
+                      className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-transparent via-emerald-300/30 to-transparent"
+                      animate={{ x: [-72, 360] }}
+                      transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <span>Campaign context</span>
+                    <ArrowRight className="h-4 w-4 text-emerald-300" />
+                    <span>Clip angles</span>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {["Funny reaction hook", "Creator POV moment", "Problem -> solution"].map((angle, index) => (
                       <motion.div
-                        className="h-full rounded-full bg-emerald-400"
-                        initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ duration: 4.8, repeat: Infinity, ease: "linear" }}
-                      />
-                    </div>
-                    <div className="absolute bottom-8 left-4 right-4 flex items-end gap-1">
-                      {[35, 58, 42, 72, 50, 64, 38, 56].map((height, index) => (
-                        <motion.span
-                          key={index}
-                          className="w-full rounded-full bg-emerald-300/50"
-                          style={{ height: `${height / 5}px` }}
-                          animate={{ opacity: [0.35, 0.8, 0.45] }}
-                          transition={{ delay: index * 0.12, duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                        />
+                        key={angle}
+                        className="rounded-lg border border-white/10 bg-slate-950/60 p-2.5 text-xs font-medium leading-5 text-white"
+                        initial={false}
+                        animate={{ opacity: [0.55, 1, 1, 0.75], y: [6, 0, 0, 0] }}
+                        transition={{ delay: 1.15 + index * 0.35, duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                      >
+                        {angle}
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <motion.div
+                    className="rounded-xl border border-emerald-400/30 bg-emerald-400/[0.08] p-3"
+                    animate={{ boxShadow: ["0 0 0 rgba(16,185,129,0)", "0 0 28px rgba(16,185,129,.18)", "0 0 0 rgba(16,185,129,0)"] }}
+                    transition={{ delay: 2.4, duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Production queue ready</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      {[
+                        ["8", "clips to edit"],
+                        ["4", "captions ready"],
+                        ["3", "posts scheduled"]
+                      ].map(([value, label]) => (
+                        <div key={label} className="rounded-lg border border-white/10 bg-slate-950/55 px-2 py-2">
+                          <p className="font-mono text-lg font-semibold text-white">{value}</p>
+                          <p className="mt-1 text-[10px] leading-3 text-slate-400">{label}</p>
+                        </div>
                       ))}
                     </div>
-                    <motion.div
-                      className="absolute inset-x-0 top-0 h-px bg-emerald-300 shadow-[0_0_20px_rgba(16,185,129,.95)]"
-                      animate={{ y: [0, 266, 0] }}
-                      transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <motion.div
-                      className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-emerald-300/12 to-transparent"
-                      animate={{ y: [0, 230, 0] }}
-                      transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                  </div>
-                  <div className="grid gap-2.5">
-                    {[
-                      ["00:14:32", "Strong reaction", "91%"],
-                      ["00:27:10", "Hook candidate", "84%"],
-                      ["00:41:02", "Clip idea ready", "88%"]
-                    ].map(([time, label, score]) => (
-                      <div key={time} className="rounded-lg border border-white/10 bg-slate-950/60 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-mono text-xs text-slate-500">{time}</span>
-                          <span className="font-mono text-xs text-emerald-300">{score}</span>
-                        </div>
-                        <p className="mt-1 text-sm font-medium text-white">{label}</p>
-                      </div>
-                    ))}
-                    <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/[0.06] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Ready</p>
-                      <p className="mt-1 text-sm font-semibold text-white">Raw footage converted into a clip idea.</p>
-                    </div>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
               <ul className="grid gap-3 text-sm text-slate-300">
                 {[
-                  ["moment scanning", ScanSearch],
-                  ["clip ideas", Clapperboard],
+                  ["clip angles", Clapperboard],
                   ["hooks & captions", Captions],
-                  ["production workflow", Workflow]
+                  ["production tasks", Workflow],
+                  ["scheduled outputs", CalendarClock]
                 ].map(([label, Icon]) => (
                   <li key={label as string} className="flex items-center gap-3">
                     <Icon className="h-4 w-4 text-emerald-300" />

@@ -72,7 +72,7 @@ export default function HeroPhone({ activeIndex }: { activeIndex: number }) {
             {[18, 43, 58, 82].map((position, index) => (
               <motion.span
                 key={`${activeIndex}-${position}`}
-                className="absolute top-[8px] z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
+                className="absolute top-[5px] z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_16px_rgba(16,185,129,.8)]"
                 style={{ left: `${position}%` }}
                 initial={{ opacity: 0, scale: 0.4 }}
                 animate={{ opacity: 1, scale: [0.4, 1.35, 1] }}
