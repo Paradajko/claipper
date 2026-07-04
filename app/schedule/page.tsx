@@ -11,7 +11,7 @@ export default async function SchedulePage() {
     <AppShell title="Scheduled posts" eyebrow="Schedule">
       <Card>
         <div className="mb-5 flex items-center gap-2">
-          <CalendarClock className="text-cyan-200" />
+          <CalendarClock className="text-emerald-300" />
           <h2 className="text-lg font-semibold text-white">Publishing queue</h2>
         </div>
         <div className="overflow-x-auto">
@@ -35,12 +35,12 @@ export default async function SchedulePage() {
                     <td className="px-3 py-3 text-white">{post.platform}</td>
                     <td className="px-3 py-3 text-slate-300">{post.target_account ?? "bez účtu"}</td>
                     <td className="px-3 py-3">
-                      {clip ? <Link href={`/clips/${clip.id}`} className="text-cyan-200 hover:text-cyan-100">{clip.title ?? "Untitled"}</Link> : "bez clipu"}
+                      {clip ? <Link href={`/clips/${clip.id}`} className="text-emerald-300 hover:text-emerald-200">{clip.title ?? "Untitled"}</Link> : "bez clipu"}
                     </td>
-                    <td className="px-3 py-3"><Badge className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">{post.status}</Badge></td>
+                    <td className="px-3 py-3"><Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{post.status}</Badge></td>
                     <td className="rounded-r-md px-3 py-3">
                       {post.post_url ? (
-                        <a href={post.post_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-cyan-200">
+                        <a href={post.post_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-emerald-300">
                           URL <ExternalLink size={14} />
                         </a>
                       ) : (

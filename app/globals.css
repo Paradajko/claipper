@@ -18,8 +18,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 82% -10%, rgba(34, 211, 238, 0.2), transparent 28rem),
-    radial-gradient(circle at 8% 18%, rgba(14, 165, 233, 0.12), transparent 24rem),
+    radial-gradient(circle at 82% -10%, rgba(16, 185, 129, 0.2), transparent 28rem),
+    radial-gradient(circle at 8% 18%, rgba(16, 185, 129, 0.12), transparent 24rem),
     #05070b;
   color: #eef7fb;
 }
@@ -30,7 +30,7 @@ a {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.35);
+  background: rgba(16, 185, 129, 0.35);
 }
 
 .grid-mask {
@@ -57,6 +57,6 @@ a {
   inset: 0 auto 0 0;
   width: 2px;
   content: "";
-  background: linear-gradient(to bottom, transparent, #22d3ee, transparent);
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.75);
+  background: linear-gradient(to bottom, transparent, #10b981, transparent);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.75);
 }

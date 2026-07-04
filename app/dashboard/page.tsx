@@ -25,7 +25,7 @@ export default async function DashboardPage() {
                 <p className="text-sm text-slate-400">{card.label}</p>
                 <p className="mt-2 text-3xl font-semibold text-white">{card.value}</p>
               </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-cyan-300/10 text-cyan-200">
+              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-emerald-400/10 text-emerald-300">
                 <card.icon />
               </div>
             </div>
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
 
         <Card>
           <div className="mb-5 flex items-center gap-2">
-            <ListChecks className="text-cyan-200" />
+            <ListChecks className="text-emerald-300" />
             <h2 className="text-lg font-semibold text-white">Today’s tasks</h2>
           </div>
           <div className="space-y-3">

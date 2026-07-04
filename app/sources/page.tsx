@@ -10,7 +10,7 @@ export default async function SourcesPage() {
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <Card>
           <div className="mb-5 flex items-center gap-2">
-            <Plus className="text-cyan-200" />
+            <Plus className="text-emerald-300" />
             <h2 className="text-lg font-semibold text-white">Add source video</h2>
           </div>
           {!isSupabaseConfigured ? (
@@ -33,7 +33,7 @@ export default async function SourcesPage() {
             <Input name="status" label="Status" defaultValue="new" />
             <Textarea name="transcript" label="Transcript" />
             <Textarea name="notes" label="Notes" />
-            <button className="mt-2 h-11 rounded-md bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200">
+            <button className="mt-2 h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">
               Uložiť zdroj
             </button>
           </form>
@@ -45,7 +45,7 @@ export default async function SourcesPage() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="mb-3 flex flex-wrap gap-2">
-                    <Badge className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">{source.status}</Badge>
+                    <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{source.status}</Badge>
                     {source.platform ? <Badge className="border-white/10 bg-white/5 text-slate-200">{source.platform}</Badge> : null}
                   </div>
                   <h2 className="text-xl font-semibold text-white">{source.title}</h2>
@@ -56,7 +56,7 @@ export default async function SourcesPage() {
                   </p>
                 </div>
                 {source.source_url ? (
-                  <a href={source.source_url} target="_blank" className="inline-flex items-center gap-2 text-sm text-cyan-200" rel="noreferrer">
+                  <a href={source.source_url} target="_blank" className="inline-flex items-center gap-2 text-sm text-emerald-300" rel="noreferrer">
                     Source <ExternalLink size={15} />
                   </a>
                 ) : null}
@@ -73,7 +73,7 @@ function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
   return (
     <label className="grid gap-1 text-sm text-slate-300">
       {label}
-      <input {...props} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-cyan-300/60" />
+      <input {...props} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
     </label>
   );
 }
@@ -82,7 +82,7 @@ function Textarea({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextArea
   return (
     <label className="grid gap-1 text-sm text-slate-300">
       {label}
-      <textarea {...props} rows={4} className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+      <textarea {...props} rows={4} className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/60" />
     </label>
   );
 }

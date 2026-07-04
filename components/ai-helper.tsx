@@ -41,9 +41,9 @@ export function AiHelper({ clip }: { clip: ClipWithSchedule }) {
   }
 
   return (
-    <div className="rounded-lg border border-cyan-300/20 bg-cyan-300/[0.055] p-4">
+    <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/[0.055] p-4">
       <div className="mb-4 flex items-center gap-2">
-        <WandSparkles className="text-cyan-200" size={18} />
+        <WandSparkles className="text-emerald-300" size={18} />
         <h2 className="text-sm font-semibold text-white">AI helper</h2>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -52,13 +52,13 @@ export function AiHelper({ clip }: { clip: ClipWithSchedule }) {
             key={action.id}
             onClick={() => void run(action.id)}
             disabled={Boolean(loading)}
-            className="h-9 rounded-md border border-white/10 bg-black/25 px-3 text-xs font-semibold text-slate-100 transition hover:border-cyan-300/40 disabled:cursor-wait disabled:opacity-60"
+            className="h-9 rounded-md border border-white/10 bg-black/25 px-3 text-xs font-semibold text-slate-100 transition hover:border-emerald-400/40 disabled:cursor-wait disabled:opacity-60"
           >
             {loading === action.id ? "Generating..." : action.label}
           </button>
         ))}
       </div>
-      {result ? <pre className="mt-4 whitespace-pre-wrap rounded-md border border-white/10 bg-black/35 p-3 text-sm leading-6 text-cyan-50">{result}</pre> : null}
+      {result ? <pre className="mt-4 whitespace-pre-wrap rounded-md border border-white/10 bg-black/35 p-3 text-sm leading-6 text-emerald-50">{result}</pre> : null}
     </div>
   );
 }

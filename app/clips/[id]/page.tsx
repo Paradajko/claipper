@@ -14,7 +14,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
   return (
     <AppShell title={clip.title ?? "Clip detail"} eyebrow="Production workspace">
       <div className="mb-5">
-        <Link href="/clips" className="inline-flex items-center gap-2 text-sm text-cyan-200">
+        <Link href="/clips" className="inline-flex items-center gap-2 text-sm text-emerald-300">
           <ArrowLeft size={16} /> Späť na board
         </Link>
       </div>
@@ -44,7 +44,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
               <Textarea name="cta" label="CTA" defaultValue={clip.cta ?? ""} />
               <Input name="exported_video_url" label="Exported video URL" defaultValue={clip.exported_video_url ?? ""} />
               <Textarea name="notes" label="Edit notes" defaultValue={clip.notes ?? ""} />
-              <button className="h-11 rounded-md bg-cyan-300 font-semibold text-slate-950 hover:bg-cyan-200">Uložiť zmeny</button>
+              <button className="h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">Uložiť zmeny</button>
             </form>
           </Card>
         </div>
@@ -57,7 +57,7 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
             <div className="flex flex-wrap gap-2">
               {clipStatuses.map((status) => (
                 <form key={status} action={updateClipStatus.bind(null, clip.id, status as ClipStatus)}>
-                  <button className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-cyan-300/40">
+                  <button className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-400/40">
                     {status}
                   </button>
                 </form>
@@ -73,14 +73,14 @@ export default async function ClipDetailPage({ params }: { params: Promise<{ id:
                   <div key={post.id} className="rounded-md border border-white/10 bg-black/25 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-medium text-white">{post.platform}</p>
-                      <Badge className="border-cyan-300/30 bg-cyan-300/10 text-cyan-100">{post.status}</Badge>
+                      <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{post.status}</Badge>
                     </div>
                     <p className="mt-2 flex items-center gap-2 text-sm text-slate-400">
                       <Clock size={15} /> {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("sk-SK") : "bez dátumu"}
                     </p>
                     <p className="mt-2 text-sm text-slate-300">{post.views.toLocaleString("sk-SK")} views · {post.likes} likes · {post.comments} comments</p>
                     {post.post_url ? (
-                      <a href={post.post_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-cyan-200">
+                      <a href={post.post_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-emerald-300">
                         Post URL <ExternalLink size={15} />
                       </a>
                     ) : null}
@@ -110,7 +110,7 @@ function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
   return (
     <label className="grid gap-1 text-sm text-slate-300">
       {label}
-      <input {...props} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-cyan-300/60" />
+      <input {...props} className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
     </label>
   );
 }
@@ -119,7 +119,7 @@ function Textarea({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextArea
   return (
     <label className="grid gap-1 text-sm text-slate-300">
       {label}
-      <textarea {...props} rows={4} className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+      <textarea {...props} rows={4} className="rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-emerald-400/60" />
     </label>
   );
 }

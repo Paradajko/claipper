@@ -32,7 +32,7 @@ export default async function ClipsPage() {
               <div className="space-y-3">
                 {columnClips.map((clip) => (
                   <Link href={`/clips/${clip.id}`} key={clip.id}>
-                    <Card className="p-4 transition hover:border-cyan-300/30 hover:bg-cyan-300/[0.06]">
+                    <Card className="p-4 transition hover:border-emerald-400/30 hover:bg-emerald-400/[0.06]">
                       <StatusBadge status={clip.status} />
                       <h3 className="mt-3 text-sm font-semibold text-white">{clip.title ?? "Untitled clip"}</h3>
                       <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-400">{clip.hook ?? clip.caption ?? "Bez hooku."}</p>
