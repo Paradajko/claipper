@@ -25,6 +25,10 @@ export const metadata: Metadata = {
     description: "6 hours of footage, 10 ranked clip ideas by morning. AI finds the moments. You cut the keepers.",
     images: ["/images/og-claipper.png"]
   },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }]
+  },
   alternates: {
     canonical: "https://claipper.com",
     languages: {

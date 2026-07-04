@@ -1,0 +1,18 @@
+<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="0" y="0" width="220" height="220" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="mint" x1="20" y1="30" x2="170" y2="185" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6DFFE0"/><stop offset="1" stop-color="#28E0A7"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#glow)" stroke="url(#mint)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M146 42H70C54.536 42 42 54.536 42 70V150C42 165.464 54.536 178 70 178H146"/>
+    <path d="M146 42C164 42 178 56 178 74"/>
+    <path d="M146 178C164 178 178 164 178 146"/>
+  </g>
+  <path d="M91 80L91 140L142 110L91 80Z" fill="#F5F8FC"/>
+  <line x1="122" y1="34" x2="122" y2="186" stroke="#8FFFE2" stroke-width="3" stroke-linecap="round" filter="url(#glow)"/>
+</svg>

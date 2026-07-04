@@ -1,7 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { clsx } from "clsx";
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, CalendarClock, Clapperboard, Home, Library, Settings, Workflow } from "lucide-react";
+import { BarChart3, CalendarClock, Clapperboard, Home, Library, Settings } from "lucide-react";
 import type { ClipStatus } from "@/lib/types";
 
 export const statusMeta: Record<ClipStatus, { label: string; className: string }> = {
@@ -70,14 +71,16 @@ export function AppShell({ children, title, eyebrow }: { children: React.ReactNo
     <div className="min-h-screen">
       <div className="fixed inset-0 -z-10 grid-mask opacity-80" />
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-white/10 bg-black/30 p-4 backdrop-blur-xl lg:block">
-        <Link href="/" className="mb-8 flex items-center gap-3 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-400 text-slate-950">
-            <Workflow size={22} />
-          </span>
-          <span>
-            <span className="block text-base font-bold">Claipper</span>
-            <span className="block text-xs text-emerald-200/70">Production workspace</span>
-          </span>
+        <Link href="/" className="mb-8 flex flex-col rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-3.5">
+          <Image
+            src="/images/claipper-logo.svg"
+            alt="Claipper"
+            width={900}
+            height={220}
+            priority
+            className="h-12 w-auto max-w-[190px] object-contain"
+          />
+          <span className="mt-1 block text-xs text-emerald-200/70">Production workspace</span>
         </Link>
         <nav className="space-y-1">
           {navItems.map((item) => (

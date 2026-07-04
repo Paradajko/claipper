@@ -29,8 +29,15 @@ export default function LandingClient() {
     <main className="relative min-h-screen overflow-hidden">
       <div className="absolute inset-0 -z-10 grid-mask opacity-80" />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <Link href="/" className="text-lg font-bold text-white">
-          cl<span className="text-emerald-400">AI</span>pper
+        <Link href="/" className="inline-flex items-center">
+          <Image
+            src="/images/claipper-logo.svg"
+            alt="Claipper"
+            width={900}
+            height={220}
+            priority
+            className="h-10 w-auto max-w-[170px] object-contain"
+          />
         </Link>
         <nav className="hidden items-center gap-6 text-sm text-slate-300 sm:flex">
           <a href="#mylaura" className="transition hover:text-white">MyLaura x Claipper</a>
