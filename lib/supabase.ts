@@ -89,7 +89,7 @@ export async function createSourceVideo(formData: FormData) {
   "use server";
 
   const supabase = getSupabaseAdmin();
-  if (!supabase) redirect("/app/sources?demo=1");
+  if (!supabase) redirect("/app/content-lab?demo=1");
 
   const duration = Number(formData.get("duration_seconds"));
   const payload = {
@@ -108,9 +108,9 @@ export async function createSourceVideo(formData: FormData) {
   const { error } = await supabase.from("source_videos").insert(payload);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/app/sources");
+  revalidatePath("/app/content-lab");
   revalidatePath("/app");
-  redirect("/app/sources");
+  redirect("/app/content-lab");
 }
 
 export async function updateClipStatus(clipId: string, status: ClipStatus) {

@@ -36,7 +36,7 @@ export function AiHelper({ clip }: { clip: ClipWithSchedule }) {
       })
     });
     const data = (await response.json()) as { text?: string; error?: string; demo?: boolean };
-    setResult(data.text ?? data.error ?? "Bez odpovede.");
+    setResult(data.text ?? data.error ?? "No response.");
     setLoading(null);
   }
 
