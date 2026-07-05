@@ -56,7 +56,7 @@ export async function getStreamVideo(id: string): Promise<StreamVideoDetail | nu
 
   const { data, error } = await supabase
     .from("videos")
-    .select("*, transcripts(*), transcript_segments(*), clip_ideas(*), clips(*)")
+    .select("*, transcripts(*), transcript_segments(*), clip_ideas(*), clips(*), processing_jobs(*), video_imports(*)")
     .eq("id", id)
     .order("score", { referencedTable: "clip_ideas", ascending: false })
     .single();
@@ -67,6 +67,19 @@ export async function getStreamVideo(id: string): Promise<StreamVideoDetail | nu
   }
 
   return data as StreamVideoDetail;
+}
+
+export async function createStorageSignedUrl(bucket: string | null | undefined, storagePath: string | null | undefined, expiresIn = 3600) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase || !bucket || !storagePath) return null;
+
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, expiresIn);
+  if (error) {
+    console.error("Failed to create signed storage URL", error);
+    return null;
+  }
+
+  return data.signedUrl;
 }
 
 export async function getClipIdea(id: string): Promise<ClipIdea | null> {

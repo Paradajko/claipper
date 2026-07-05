@@ -46,6 +46,10 @@ export type Clip = {
   status: ClipStatus;
   exported_video_url: string | null;
   file_path?: string | null;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
+  render_status?: string | null;
+  type?: "draft" | "ready" | null;
   target_platforms: string[] | null;
   mylaura_campaign_name: string | null;
   notes: string | null;
@@ -75,7 +79,12 @@ export type ClipWithSchedule = Clip & {
 };
 
 export type StreamVideoStatus =
+  | "created"
+  | "uploading"
   | "uploaded"
+  | "import_queued"
+  | "downloading"
+  | "queued"
   | "extracting_audio"
   | "transcribing"
   | "segmenting"
@@ -92,10 +101,16 @@ export type StreamVideo = {
   original_filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  file_size?: number | null;
   duration_seconds: number | null;
   file_path: string;
+  source_type?: "direct_upload" | "platform_import" | "live";
+  source_url?: string | null;
+  storage_bucket?: string | null;
+  storage_path?: string | null;
   audio_path: string | null;
   status: StreamVideoStatus;
+  progress_percent?: number | null;
   progress_text: string | null;
   error_message: string | null;
   raw_data: Record<string, unknown> | null;
@@ -108,6 +123,8 @@ export type Transcript = {
   status: string;
   language: string | null;
   text: string | null;
+  full_text?: string | null;
+  segments_json?: unknown;
   raw_data: Record<string, unknown> | null;
 };
 
@@ -146,10 +163,29 @@ export type ProcessingJob = {
   created_at: string;
   updated_at: string | null;
   video_id: string | null;
+  clip_idea_id?: string | null;
+  clip_id?: string | null;
   job_type: string;
   status: string;
+  progress_percent?: number | null;
   step: string | null;
+  current_step?: string | null;
+  attempts?: number | null;
   error_message: string | null;
+  worker_id?: string | null;
+  locked_at?: string | null;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type VideoImport = {
+  id: string;
+  video_id: string;
+  source_url: string;
+  platform: string;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string | null;
   raw_data: Record<string, unknown> | null;
 };
 
@@ -159,4 +195,5 @@ export type StreamVideoDetail = StreamVideo & {
   clip_ideas?: ClipIdea[];
   clips?: Clip[];
   processing_jobs?: ProcessingJob[];
+  video_imports?: VideoImport[];
 };

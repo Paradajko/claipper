@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 export const videoStatuses = [
+  "created",
+  "uploading",
   "uploaded",
+  "import_queued",
+  "downloading",
+  "queued",
   "extracting_audio",
   "transcribing",
   "segmenting",

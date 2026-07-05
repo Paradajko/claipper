@@ -5,7 +5,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { create as createYoutubeDl } from "youtube-dl-exec";
 import {
   buildTranscriptSegments,
   normalizeClipCandidates,
@@ -22,8 +21,7 @@ export const streamScanRoot =
   process.env.STREAM_SCAN_STORAGE_DIR ??
   (process.env.VERCEL ? path.join("/tmp", "claipper-stream-scan") : path.join(process.cwd(), "storage", "stream-scan"));
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
-const bundledYtDlpBinary = path.join(process.cwd(), "node_modules", "youtube-dl-exec", "bin", "yt-dlp");
-const platformDownloader = createYoutubeDl(process.env.YTDLP_PATH ?? bundledYtDlpBinary);
+const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 
 type VerboseTranscript = {
   text?: string;
@@ -65,16 +63,21 @@ export async function downloadPlatformVideo(contentUrl: string, id: string) {
   const outputTemplate = path.join(streamScanRoot, "videos", `${id}.%(ext)s`);
 
   try {
-    const { stdout } = await platformDownloader.exec(
+    const { stdout } = await execFileAsync(
+      ytDlpBinary,
+      [
       contentUrl,
-      {
-        noPlaylist: true,
-        restrictFilenames: true,
-        mergeOutputFormat: "mp4",
-        print: "after_move:filepath",
-        format: "bv*+ba/b",
-        output: outputTemplate
-      } as never
+      "--no-playlist",
+      "--restrict-filenames",
+      "--merge-output-format",
+      "mp4",
+      "--print",
+      "after_move:filepath",
+      "--format",
+      "bv*+ba/b",
+      "--output",
+      outputTemplate
+      ]
     );
 
     const filePath = stdout.trim().split("\n").filter(Boolean).at(-1);

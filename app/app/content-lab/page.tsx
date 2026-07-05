@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Link2, UploadCloud } from "lucide-react";
+import { ArrowRight, ExternalLink, Link2 } from "lucide-react";
+import { ContentLabIngest } from "@/components/content-lab-ingest";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { getSourceVideos, getStreamVideos, isSupabaseConfigured } from "@/lib/supabase";
 import type { StreamVideo } from "@/lib/types";
@@ -17,7 +18,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
             <h2 className="text-lg font-semibold text-white">Analyze long-form content</h2>
           </div>
           <p className="mb-5 text-sm leading-6 text-slate-300">
-            Upload long-form content or paste a YouTube, Kick, Twitch, MP4 or MOV link. Claipper will analyze it, generate transcripts, find strong moments, and create clip ideas.
+            Upload long-form content directly to Supabase Storage or queue a YouTube, Kick or Twitch import for the processing worker.
           </p>
           {query.error ? (
             <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
@@ -29,24 +30,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
               Demo mode: AI analysis will start saving after Supabase and AI environment variables are configured.
             </p>
           ) : null}
-          <form action="/api/stream-scan/upload" method="post" encType="multipart/form-data" className="grid gap-4">
-            <Input name="title" label="Video title" placeholder="Stream title or episode name" required />
-            <Input name="content_url" label="Paste content/video URL" placeholder="YouTube, Kick, Twitch or direct MP4/MOV URL" />
-            <label className="grid gap-2 rounded-lg border border-dashed border-white/15 bg-white/[0.03] p-4 text-sm text-slate-300 sm:p-5">
-              <span className="flex items-center gap-2 font-medium text-white">
-                <UploadCloud className="h-4 w-4 text-emerald-300" />
-                Upload video
-              </span>
-              <input name="video" type="file" accept="video/*" className="w-full text-sm text-slate-400 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-400 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-950" />
-            </label>
-            <label className="flex items-center gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-3 text-sm text-slate-300">
-              <input name="attach_mylaura_brief" type="checkbox" className="h-4 w-4 accent-emerald-400" />
-              Attach to MyLaura Brief
-            </label>
-            <button className="mt-2 h-12 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">
-              Analyze Content
-            </button>
-          </form>
+          <ContentLabIngest />
         </Card>
 
         <div className="space-y-4">
@@ -88,10 +72,17 @@ function StreamVideoCard({ video }: { video: StreamVideo }) {
         <div>
           <div className="mb-3 flex flex-wrap gap-2">
             <VideoStateBadge state={video.status} />
+            <Badge className="border-white/10 bg-white/5 text-slate-200">{formatSourceType(video.source_type)}</Badge>
             {video.original_filename ? <Badge className="border-white/10 bg-white/5 text-slate-200">{video.original_filename}</Badge> : null}
           </div>
           <h2 className="text-xl font-semibold text-white">{video.title}</h2>
           <p className="mt-2 text-sm text-slate-400">{video.progress_text ?? "Ready for Stream Scan."}</p>
+          <div className="mt-4 h-2 max-w-md overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,.45)]"
+              style={{ width: `${Math.max(0, Math.min(100, video.progress_percent ?? statusProgress(video.status)))}%` }}
+            />
+          </div>
           {video.error_message ? <p className="mt-2 text-sm text-rose-200">{video.error_message}</p> : null}
         </div>
         <Link href={`/app/content-lab/${video.id}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15">
@@ -112,11 +103,27 @@ function VideoStateBadge({ state }: { state: StreamVideo["status"] }) {
   );
 }
 
-function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  return (
-    <label className="grid gap-1 text-sm text-slate-300">
-      {label}
-      <input {...props} className="h-12 w-full rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
-    </label>
-  );
+function statusProgress(status: StreamVideo["status"]) {
+  const map: Record<StreamVideo["status"], number> = {
+    created: 0,
+    uploading: 10,
+    uploaded: 20,
+    import_queued: 10,
+    downloading: 20,
+    queued: 25,
+    extracting_audio: 40,
+    transcribing: 55,
+    segmenting: 68,
+    analyzing: 78,
+    ranking: 90,
+    ready: 100,
+    failed: 100
+  };
+  return map[status] ?? 0;
+}
+
+function formatSourceType(sourceType: StreamVideo["source_type"]) {
+  if (sourceType === "platform_import") return "Platform import";
+  if (sourceType === "live") return "Live";
+  return "Direct upload";
 }

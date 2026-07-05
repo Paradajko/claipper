@@ -57,15 +57,18 @@ describe("AI-first app workflow naming", () => {
 
   it("keeps Content Lab simple and AI-first", () => {
     const contentLab = read("app/app/content-lab/page.tsx");
+    const ingest = read("components/content-lab-ingest.tsx");
 
     expect(contentLab).toContain("Content Lab");
     expect(contentLab).toContain("Add a video link or upload long-form content. Claipper will analyze it and turn it into clip ideas.");
-    expect(contentLab).toContain("Paste content/video URL");
-    expect(contentLab).toContain("Upload video");
-    expect(contentLab).toContain("Attach to MyLaura Brief");
-    expect(contentLab).toContain("Analyze Content");
+    expect(contentLab).toContain("directly to Supabase Storage");
+    expect(ingest).toContain("Upload video");
+    expect(ingest).toContain("Import from link");
+    expect(ingest).toContain("Platform link");
+    expect(ingest).toContain("Upload and queue scan");
+    expect(ingest).toContain("Import with worker");
 
-    for (const manualField of ["Platform", "Duration seconds", "Status", "Transcript"]) {
+    for (const manualField of ["Duration seconds", "Status", "Transcript"]) {
       expect(contentLab).not.toContain(manualField);
     }
   });
