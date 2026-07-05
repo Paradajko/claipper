@@ -17,7 +17,9 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-export const streamScanRoot = path.join(process.cwd(), "storage", "stream-scan");
+export const streamScanRoot =
+  process.env.STREAM_SCAN_STORAGE_DIR ??
+  (process.env.VERCEL ? path.join("/tmp", "claipper-stream-scan") : path.join(process.cwd(), "storage", "stream-scan"));
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 
