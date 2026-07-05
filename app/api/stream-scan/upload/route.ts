@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { saveUploadedVideo, saveVideoBuffer } from "@/lib/stream-scan-server";
+import { downloadPlatformVideo, saveUploadedVideo, saveVideoBuffer } from "@/lib/stream-scan-server";
 
 export const runtime = "nodejs";
 
@@ -30,12 +30,14 @@ export async function POST(request: Request) {
       sizeBytes = file.size;
       filePath = await saveUploadedVideo(file, id);
     } else if (contentUrl) {
-      const downloaded = await downloadDirectVideoUrl(contentUrl);
+      const downloaded = isKnownPlatformUrl(contentUrl)
+        ? await downloadPlatformVideo(contentUrl, id)
+        : await downloadDirectVideoUrl(contentUrl, id);
       title ||= downloaded.filename.replace(/\.[^.]+$/, "");
       originalFilename = downloaded.filename;
       mimeType = downloaded.mimeType;
-      sizeBytes = downloaded.bytes.length;
-      filePath = await saveVideoBuffer(downloaded.bytes, id, downloaded.filename);
+      sizeBytes = downloaded.sizeBytes;
+      filePath = downloaded.filePath;
     } else {
       return redirectWithError(request, "Upload a video file or paste a direct video URL to start Stream Scan.");
     }
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
   return NextResponse.redirect(new URL(`/app/content-lab/${id}`, request.url), { status: 303 });
 }
 
-async function downloadDirectVideoUrl(contentUrl: string) {
+async function downloadDirectVideoUrl(contentUrl: string, id: string) {
   let url: URL;
   try {
     url = new URL(contentUrl);
@@ -99,9 +101,26 @@ async function downloadDirectVideoUrl(contentUrl: string) {
 
   const filenameFromUrl = url.pathname.split("/").filter(Boolean).pop() ?? "remote-video.mp4";
   const filename = /\.[a-z0-9]+$/i.test(filenameFromUrl) ? filenameFromUrl : `${filenameFromUrl}.mp4`;
-  return { bytes, filename, mimeType };
+  const filePath = await saveVideoBuffer(bytes, id, filename);
+  return { filePath, filename, mimeType, sizeBytes: bytes.length };
 }
 
 function redirectWithError(request: Request, message: string) {
   return NextResponse.redirect(new URL(`/app/content-lab?error=${encodeURIComponent(message)}`, request.url), { status: 303 });
+}
+
+function isKnownPlatformUrl(contentUrl: string) {
+  try {
+    const hostname = new URL(contentUrl).hostname.replace(/^www\./, "");
+    return [
+      "youtube.com",
+      "youtu.be",
+      "m.youtube.com",
+      "twitch.tv",
+      "clips.twitch.tv",
+      "kick.com"
+    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 }

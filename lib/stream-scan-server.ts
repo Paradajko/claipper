@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -19,6 +19,7 @@ const execFileAsync = promisify(execFile);
 
 export const streamScanRoot = path.join(process.cwd(), "storage", "stream-scan");
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
+const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 
 type VerboseTranscript = {
   text?: string;
@@ -53,6 +54,43 @@ export async function saveVideoBuffer(bytes: Buffer, id: string, filename: strin
   const filePath = path.join(streamScanRoot, "videos", `${id}${extension}`);
   await writeFile(filePath, bytes);
   return filePath;
+}
+
+export async function downloadPlatformVideo(contentUrl: string, id: string) {
+  await ensureStreamScanFolders();
+  const outputTemplate = path.join(streamScanRoot, "videos", `${id}.%(ext)s`);
+
+  try {
+    const { stdout } = await execFileAsync(ytDlpBinary, [
+      "--no-playlist",
+      "--restrict-filenames",
+      "--merge-output-format",
+      "mp4",
+      "--print",
+      "after_move:filepath",
+      "-f",
+      "bv*+ba/b",
+      "-o",
+      outputTemplate,
+      contentUrl
+    ], { maxBuffer: 1024 * 1024 });
+
+    const filePath = stdout.trim().split("\n").filter(Boolean).at(-1);
+    if (!filePath) {
+      throw new Error("Downloader finished without returning a video file path.");
+    }
+    const fileStats = await stat(filePath);
+
+    return {
+      filePath,
+      filename: path.basename(filePath),
+      mimeType: "video/mp4",
+      sizeBytes: fileStats.size
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown downloader error.";
+    throw new Error(`Could not download that platform link. Install yt-dlp and set YTDLP_PATH, or upload the video file directly. Details: ${message}`);
+  }
 }
 
 export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: string) {
