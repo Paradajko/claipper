@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { demoClips, demoScheduledPosts, demoSources } from "@/lib/demo-data";
-import type { ClipStatus, ClipWithSchedule, ScheduledPost, SourceVideo } from "@/lib/types";
+import type { ClipIdea, ClipStatus, ClipWithSchedule, ScheduledPost, SourceVideo, StreamVideo, StreamVideoDetail } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -31,6 +31,55 @@ export async function getSourceVideos(): Promise<SourceVideo[]> {
   }
 
   return data as SourceVideo[];
+}
+
+export async function getStreamVideos(): Promise<StreamVideo[]> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Failed to load stream scan videos", error);
+    return [];
+  }
+
+  return data as StreamVideo[];
+}
+
+export async function getStreamVideo(id: string): Promise<StreamVideoDetail | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("videos")
+    .select("*, transcripts(*), transcript_segments(*), clip_ideas(*), clips(*)")
+    .eq("id", id)
+    .order("score", { referencedTable: "clip_ideas", ascending: false })
+    .single();
+
+  if (error) {
+    console.error("Failed to load stream scan video", error);
+    return null;
+  }
+
+  return data as StreamVideoDetail;
+}
+
+export async function getClipIdea(id: string): Promise<ClipIdea | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.from("clip_ideas").select("*").eq("id", id).single();
+  if (error) {
+    console.error("Failed to load clip idea", error);
+    return null;
+  }
+
+  return data as ClipIdea;
 }
 
 export async function getClips(): Promise<ClipWithSchedule[]> {

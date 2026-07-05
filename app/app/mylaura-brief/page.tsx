@@ -13,7 +13,7 @@ const analyzedContext = [
 export default function MyLauraBriefPage() {
   return (
     <AppShell title="MyLaura Brief" eyebrow="Campaign context">
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr] xl:gap-6">
         <Card>
           <div className="mb-5 flex items-center gap-2">
             <FileText className="text-emerald-300" />
@@ -25,9 +25,9 @@ export default function MyLauraBriefPage() {
           <form className="grid gap-4">
             <label className="grid gap-1 text-sm text-slate-300">
               MyLaura campaign URL
-              <input name="mylaura_campaign_url" placeholder="https://..." className="h-10 rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
+              <input name="mylaura_campaign_url" placeholder="https://..." className="h-12 w-full rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
             </label>
-            <button className="h-11 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">Analyze Brief</button>
+            <button className="h-12 rounded-md bg-emerald-400 font-semibold text-slate-950 hover:bg-emerald-300">Analyze Brief</button>
           </form>
         </Card>
 
@@ -38,7 +38,7 @@ export default function MyLauraBriefPage() {
           </div>
           <div className="grid gap-3">
             {analyzedContext.map((item) => (
-              <div key={item.label} className="rounded-md border border-white/10 bg-white/[0.035] p-4">
+              <div key={item.label} className="rounded-md border border-white/10 bg-white/[0.035] p-3.5 sm:p-4">
                 <p className="text-sm font-semibold text-white">{item.label}</p>
                 <p className="mt-1 text-sm leading-6 text-slate-400">{item.value}</p>
               </div>

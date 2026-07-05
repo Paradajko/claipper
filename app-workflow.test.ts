@@ -11,6 +11,15 @@ describe("AI-first app workflow naming", () => {
       expect(shell).toContain(`label: "${label}"`);
     }
 
+    for (const mobileLabel of ["Dashboard", "Brief", "Lab", "Clips", "More"]) {
+      expect(shell).toContain(`mobileLabel: "${mobileLabel}"`);
+    }
+
+    expect(shell).toContain("MobileBottomNav");
+    expect(shell).toContain("md:hidden");
+    expect(shell).toContain("Production workspace");
+    expect(shell).toContain("pb-28");
+
     expect(shell).not.toContain("Zdroje");
     expect(shell).not.toContain("Reporty");
     expect(shell).not.toContain("Sources");
@@ -38,6 +47,10 @@ describe("AI-first app workflow naming", () => {
     expect(dashboard).toContain("Ready Clips");
     expect(dashboard).toContain("Recent analyses");
     expect(dashboard).toContain("No analyses yet.");
+    expect(dashboard).toContain("order-1");
+    expect(dashboard).toContain("order-2");
+    expect(dashboard).toContain("order-3");
+    expect(dashboard).toContain("order-4");
     expect(dashboard).not.toContain("Operator dashboard");
     expect(dashboard).not.toContain("MyLaura Brief → Content Lab → Clips → Schedule → Reports");
   });
@@ -74,10 +87,26 @@ describe("AI-first app workflow naming", () => {
 
     expect(clips).toContain("Ideas");
     expect(clips).toContain("Production");
+    expect(clips).toContain("Selected");
+    expect(clips).toContain("Editing");
+    expect(clips).toContain("Ready");
+    expect(clips).toContain("Scheduled");
+    expect(clips).toContain("Posted");
     expect(clips).toContain("timestamp range");
     expect(clips).toContain("campaign relevance");
     expect(clips).toContain("Create Clip");
     expect(clips).not.toContain("Kanban production board");
     expect(shell).not.toContain("Clip Ideas");
+  });
+
+  it("uses mobile card layouts for schedule and settings instead of forcing wide rows", () => {
+    const schedule = read("app/app/schedule/page.tsx");
+    const settings = read("app/app/settings/page.tsx");
+
+    expect(schedule).toContain("md:hidden");
+    expect(schedule).toContain("Scheduled post");
+    expect(schedule).toContain("hidden md:block");
+    expect(settings).toContain("break-all");
+    expect(settings).toContain("sm:flex-row");
   });
 });

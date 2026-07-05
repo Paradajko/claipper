@@ -22,9 +22,9 @@ export default async function ClipsPage() {
 
   return (
     <AppShell title="Clips" eyebrow="Ideas and production">
-      <div className="mb-6 inline-flex rounded-lg border border-white/10 bg-white/[0.04] p-1">
+      <div className="mb-6 grid grid-cols-2 rounded-lg border border-white/10 bg-white/[0.04] p-1 sm:inline-flex">
         <a href="#ideas" className="rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950">Ideas</a>
-        <a href="#production" className="rounded-md px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white">Production</a>
+        <a href="#production" className="rounded-md px-4 py-2 text-center text-sm font-semibold text-slate-300 hover:text-white">Production</a>
       </div>
 
       <section id="ideas">
@@ -52,11 +52,19 @@ export default async function ClipsPage() {
           <Badge className="border-white/10 bg-white/5 text-slate-200">{productionClips.length} active</Badge>
         </div>
 
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 md:hidden">
+          {productionStatuses.map((status) => (
+            <a key={status} href={`#production-${status}`} className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200">
+              {productionLabels[status]}
+            </a>
+          ))}
+        </div>
+
         <div className="grid gap-4 xl:grid-cols-5">
           {productionStatuses.map((status) => {
             const columnClips = clips.filter((clip) => clip.status === status);
             return (
-              <section key={status} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <section id={`production-${status}`} key={status} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.03] p-3">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-white">{productionLabels[status]}</h3>
                   <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300">{columnClips.length}</span>
@@ -99,15 +107,15 @@ function IdeaCard({ clip }: { clip: ClipWithSchedule }) {
         <p><span className="font-semibold text-white">campaign relevance:</span> {clip.mylaura_campaign_name ? `Matches ${clip.mylaura_campaign_name}.` : "No MyLaura Brief attached."}</p>
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
-        <button className="inline-flex items-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-300">
+        <button className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-300 sm:flex-none">
           <Check className="h-3.5 w-3.5" />
           Create Clip
         </button>
-        <button className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:border-emerald-400/40">
+        <button className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white hover:border-emerald-400/40 sm:flex-none">
           <Edit3 className="h-3.5 w-3.5" />
           Edit
         </button>
-        <button className="inline-flex items-center gap-2 rounded-md border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:border-rose-300/40">
+        <button className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-xs font-semibold text-rose-100 hover:border-rose-300/40 sm:flex-none">
           <X className="h-3.5 w-3.5" />
           Reject
         </button>

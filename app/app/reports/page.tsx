@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Eye, Lightbulb, Trophy } from "lucide-react";
+import { BarChart3, Download, Eye, Lightbulb, Trophy } from "lucide-react";
 import { AppShell, Card } from "@/components/ui";
 import { getPlatformBreakdown, getTopClips } from "@/lib/metrics";
 import { getClips, getScheduledPosts } from "@/lib/supabase";
@@ -14,7 +14,7 @@ export default async function ReportsPage() {
 
   return (
     <AppShell title="Performance report" eyebrow="Reports">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
         <Card>
           <p className="text-sm text-slate-400">Total clips</p>
           <p className="mt-2 text-3xl font-semibold text-white">{clips.length}</p>
@@ -28,6 +28,10 @@ export default async function ReportsPage() {
           <p className="mt-2 text-3xl font-semibold text-white">{totalViews.toLocaleString("en-US")}</p>
         </Card>
       </div>
+      <button className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-sm font-semibold text-emerald-100 sm:w-auto sm:px-4">
+        <Download className="h-4 w-4" />
+        Export report
+      </button>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card>

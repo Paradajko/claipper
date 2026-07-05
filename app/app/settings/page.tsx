@@ -13,14 +13,14 @@ const envChecks = [
 export default function SettingsPage() {
   return (
     <AppShell title="Settings" eyebrow="Env/status">
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+      <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr] xl:gap-6">
         <Card>
           <h2 className="mb-5 text-lg font-semibold text-white">Environment status</h2>
           <div className="space-y-3">
             {envChecks.map((env) => (
-              <div key={env.key} className="flex items-center justify-between gap-4 rounded-md border border-white/10 bg-white/[0.035] p-4">
-                <div>
-                  <p className="font-mono text-sm text-white">{env.key}</p>
+              <div key={env.key} className="flex flex-col gap-4 rounded-md border border-white/10 bg-white/[0.035] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-all font-mono text-sm text-white">{env.key}</p>
                   <p className="mt-1 text-sm text-slate-400">{env.note}</p>
                 </div>
                 <div className={env.present ? "text-lime-200" : "text-amber-200"}>

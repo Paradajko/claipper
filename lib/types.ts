@@ -31,6 +31,8 @@ export type Clip = {
   id: string;
   created_at: string;
   source_video_id: string | null;
+  video_id?: string | null;
+  clip_idea_id?: string | null;
   title: string | null;
   start_seconds: number | null;
   end_seconds: number | null;
@@ -43,6 +45,7 @@ export type Clip = {
   score: number | null;
   status: ClipStatus;
   exported_video_url: string | null;
+  file_path?: string | null;
   target_platforms: string[] | null;
   mylaura_campaign_name: string | null;
   notes: string | null;
@@ -69,4 +72,91 @@ export type ScheduledPost = {
 export type ClipWithSchedule = Clip & {
   scheduled_posts?: ScheduledPost[];
   source_videos?: Pick<SourceVideo, "title" | "platform" | "source_url" | "client_name"> | null;
+};
+
+export type StreamVideoStatus =
+  | "uploaded"
+  | "extracting_audio"
+  | "transcribing"
+  | "segmenting"
+  | "analyzing"
+  | "ranking"
+  | "ready"
+  | "failed";
+
+export type StreamVideo = {
+  id: string;
+  created_at: string;
+  updated_at: string | null;
+  title: string;
+  original_filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  duration_seconds: number | null;
+  file_path: string;
+  audio_path: string | null;
+  status: StreamVideoStatus;
+  progress_text: string | null;
+  error_message: string | null;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type Transcript = {
+  id: string;
+  created_at: string;
+  video_id: string;
+  status: string;
+  language: string | null;
+  text: string | null;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type TranscriptSegmentRecord = {
+  id: string;
+  created_at: string;
+  video_id: string;
+  transcript_id: string | null;
+  segment_index: number;
+  start_time: number;
+  end_time: number;
+  text: string;
+  status: string;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type ClipIdea = {
+  id: string;
+  created_at: string;
+  video_id: string;
+  title: string;
+  start_time: number;
+  end_time: number;
+  score: number;
+  reason: string;
+  hook: string;
+  caption: string;
+  difficulty: "easy" | "medium" | "hard";
+  clip_type: "funny" | "reaction" | "opinion" | "educational" | "hype" | "story" | "other";
+  status: string;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type ProcessingJob = {
+  id: string;
+  created_at: string;
+  updated_at: string | null;
+  video_id: string | null;
+  job_type: string;
+  status: string;
+  step: string | null;
+  error_message: string | null;
+  raw_data: Record<string, unknown> | null;
+};
+
+export type StreamVideoDetail = StreamVideo & {
+  transcripts?: Transcript[];
+  transcript_segments?: TranscriptSegmentRecord[];
+  clip_ideas?: ClipIdea[];
+  clips?: Clip[];
+  processing_jobs?: ProcessingJob[];
 };

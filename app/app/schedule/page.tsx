@@ -14,7 +14,31 @@ export default async function SchedulePage() {
           <CalendarClock className="text-emerald-300" />
           <h2 className="text-lg font-semibold text-white">Publishing queue</h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="grid gap-3 md:hidden">
+          {posts.map((post) => {
+            const clip = clipById.get(post.clip_id);
+            return (
+              <article key={post.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">Scheduled post</span>
+                  <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{post.status}</Badge>
+                </div>
+                <h3 className="text-base font-semibold text-white">{clip?.title ?? "No clip"}</h3>
+                <div className="mt-3 grid gap-2 text-sm text-slate-300">
+                  <p><span className="text-slate-500">Platform:</span> {post.platform}</p>
+                  <p><span className="text-slate-500">Date/time:</span> {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("en-US") : "No date"}</p>
+                  <p><span className="text-slate-500">Account:</span> {post.target_account ?? "No account"}</p>
+                </div>
+                {post.post_url ? (
+                  <a href={post.post_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 text-sm font-semibold text-emerald-300">
+                    Open post <ExternalLink size={14} />
+                  </a>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[760px] border-separate border-spacing-y-2 text-left text-sm">
             <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
               <tr>
