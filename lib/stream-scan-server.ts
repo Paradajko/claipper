@@ -47,6 +47,14 @@ export async function saveUploadedVideo(file: File, id: string) {
   return filePath;
 }
 
+export async function saveVideoBuffer(bytes: Buffer, id: string, filename: string) {
+  await ensureStreamScanFolders();
+  const extension = safeExtension(filename) || ".mp4";
+  const filePath = path.join(streamScanRoot, "videos", `${id}${extension}`);
+  await writeFile(filePath, bytes);
+  return filePath;
+}
+
 export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: string) {
   const { data: video, error } = await supabase.from("videos").select("*").eq("id", videoId).single();
   if (error || !video) throw new Error(error?.message ?? "Video not found.");

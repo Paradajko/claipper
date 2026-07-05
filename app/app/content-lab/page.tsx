@@ -4,7 +4,8 @@ import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { getSourceVideos, getStreamVideos, isSupabaseConfigured } from "@/lib/supabase";
 import type { StreamVideo } from "@/lib/types";
 
-export default async function ContentLabPage() {
+export default async function ContentLabPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const query = await searchParams;
   const [sources, streamVideos] = await Promise.all([getSourceVideos(), getStreamVideos()]);
 
   return (
@@ -16,8 +17,13 @@ export default async function ContentLabPage() {
             <h2 className="text-lg font-semibold text-white">Analyze long-form content</h2>
           </div>
           <p className="mb-5 text-sm leading-6 text-slate-300">
-            Paste a content link or upload long-form content. Claipper will analyze it, generate transcripts, find strong moments, and create clip ideas.
+            Upload long-form content or paste a direct MP4/MOV video URL. Claipper will analyze it, generate transcripts, find strong moments, and create clip ideas.
           </p>
+          {query.error ? (
+            <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
+              {query.error}
+            </p>
+          ) : null}
           {!isSupabaseConfigured ? (
             <p className="mb-4 rounded-md border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">
               Demo mode: AI analysis will start saving after Supabase and AI environment variables are configured.
@@ -25,7 +31,7 @@ export default async function ContentLabPage() {
           ) : null}
           <form action="/api/stream-scan/upload" method="post" encType="multipart/form-data" className="grid gap-4">
             <Input name="title" label="Video title" placeholder="Stream title or episode name" required />
-            <Input name="content_url" label="Paste content/video URL" placeholder="https://..." />
+            <Input name="content_url" label="Paste content/video URL" placeholder="Direct MP4/MOV URL, e.g. https://example.com/video.mp4" />
             <label className="grid gap-2 rounded-lg border border-dashed border-white/15 bg-white/[0.03] p-4 text-sm text-slate-300 sm:p-5">
               <span className="flex items-center gap-2 font-medium text-white">
                 <UploadCloud className="h-4 w-4 text-emerald-300" />
