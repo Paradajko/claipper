@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import youtubeDl, { create as createYoutubeDl } from "youtube-dl-exec";
+import { create as createYoutubeDl } from "youtube-dl-exec";
 import {
   buildTranscriptSegments,
   normalizeClipCandidates,
@@ -22,7 +22,8 @@ export const streamScanRoot =
   process.env.STREAM_SCAN_STORAGE_DIR ??
   (process.env.VERCEL ? path.join("/tmp", "claipper-stream-scan") : path.join(process.cwd(), "storage", "stream-scan"));
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
-const platformDownloader = process.env.YTDLP_PATH ? createYoutubeDl(process.env.YTDLP_PATH) : youtubeDl;
+const bundledYtDlpBinary = path.join(process.cwd(), "node_modules", "youtube-dl-exec", "bin", "yt-dlp");
+const platformDownloader = createYoutubeDl(process.env.YTDLP_PATH ?? bundledYtDlpBinary);
 
 type VerboseTranscript = {
   text?: string;
