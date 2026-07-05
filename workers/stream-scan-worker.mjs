@@ -1,4 +1,3 @@
-import { createReadStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import os from "node:os";
@@ -191,12 +190,7 @@ async function processAnalyzeVideo(job) {
 
   await updateJob(job.id, "running", "transcribing", 50);
   await updateVideo(video.id, "transcribing", 50, "Transcribing audio with timestamps.");
-  const transcript = await openai.audio.transcriptions.create({
-    file: createReadStream(audioPath),
-    model: process.env.OPENAI_TRANSCRIBE_MODEL ?? "whisper-1",
-    response_format: "verbose_json",
-    timestamp_granularities: ["segment"]
-  });
+  const transcript = await transcribeAudio(audioPath);
 
   await updateJob(job.id, "running", "saving_transcript", 58);
   const transcriptId = await saveTranscript(video.id, transcript);
@@ -430,6 +424,30 @@ async function saveClipIdeas(videoId, ideas) {
     }))
   );
   if (error) throw new Error(error.message);
+}
+
+async function transcribeAudio(audioPath) {
+  const form = new FormData();
+  const audioBytes = await readFile(audioPath);
+  form.append("file", new Blob([audioBytes], { type: "audio/mpeg" }), "audio.mp3");
+  form.append("model", process.env.OPENAI_TRANSCRIBE_MODEL ?? "whisper-1");
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "segment");
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: form
+  });
+
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`OpenAI transcription failed (${response.status}): ${body.slice(0, 500)}`);
+  }
+
+  return JSON.parse(body);
 }
 
 async function analyzeTranscriptSegment(segment) {
