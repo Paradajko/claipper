@@ -68,7 +68,7 @@ describe("AI-first app workflow naming", () => {
     expect(ingest).toContain("Upload and queue scan");
     expect(ingest).toContain("Import with worker");
 
-    for (const manualField of ["Duration seconds", "Status", "Transcript"]) {
+    for (const manualField of ["Duration seconds", "Transcript"]) {
       expect(contentLab).not.toContain(manualField);
     }
   });

@@ -1,45 +1,72 @@
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import {
+  assertValidWorkerEnv,
+  checkBinaryAvailability,
+  formatStartupReport,
+  loadWorkerDotEnv,
+  userFriendlyWorkerError
+} from "./worker-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
+loadWorkerDotEnv();
+try {
+  assertValidWorkerEnv();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : "Claipper Stream Scan Worker cannot start.");
+  process.exit(1);
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const workerId = process.env.WORKER_ID ?? `stream-scan-${os.hostname()}`;
-const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS ?? 5000);
+const workerId = process.env.WORKER_ID;
+const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS);
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const buckets = {
-  originals: process.env.STORAGE_BUCKET_ORIGINALS ?? "original-videos",
-  audio: process.env.STORAGE_BUCKET_AUDIO ?? "extracted-audio",
-  clips: process.env.STORAGE_BUCKET_CLIPS ?? "rendered-clips"
+  originals: process.env.STORAGE_BUCKET_ORIGINALS,
+  audio: process.env.STORAGE_BUCKET_AUDIO,
+  clips: process.env.STORAGE_BUCKET_CLIPS
 };
 
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for the Stream Scan worker.");
-}
-
 const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let activeJobId = null;
+let activeStep = "idle";
 
-console.log(`[claipper-worker] ${workerId} started`);
+await startupChecks();
 pollForever().catch((error) => {
   console.error("[claipper-worker] fatal", error);
   process.exit(1);
 });
 
 async function pollForever() {
+  await updateHeartbeat("online", null, "idle");
+  const heartbeatTimer = setInterval(() => {
+    void updateHeartbeat("online", activeJobId, activeStep);
+  }, 15000);
+
+  process.on("SIGINT", () => shutdown(heartbeatTimer));
+  process.on("SIGTERM", () => shutdown(heartbeatTimer));
+
   while (true) {
+    await updateHeartbeat("online", activeJobId, activeStep);
     const claimed = await claimNextJob();
     if (claimed) {
-      await runJob(claimed).catch((error) => failJob(claimed, cleanError(error)));
+      activeJobId = claimed.id;
+      activeStep = "claimed";
+      await updateHeartbeat("busy", claimed.id, activeStep);
+      await runJob(claimed).catch((error) => failJob(claimed, error));
+      activeJobId = null;
+      activeStep = "idle";
+      await updateHeartbeat("online", null, "idle");
     } else {
       await sleep(pollIntervalMs);
     }
@@ -63,6 +90,7 @@ async function claimNextJob() {
       status: "running",
       worker_id: workerId,
       locked_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
       attempts: (queued.attempts ?? 0) + 1,
       current_step: "claimed",
       step: "claimed",
@@ -100,7 +128,7 @@ async function processPlatformImport(job) {
   const workDir = await makeWorkDir(job.video_id);
   const outputTemplate = path.join(workDir, "source.%(ext)s");
 
-  await updateJob(job.id, "running", "downloading", 10);
+  await updateJob(job.id, "running", "downloading_source", 10);
   await updateVideo(video.id, "downloading", 10, "Downloading platform video with processing worker.");
 
   const { stdout } = await execFileAsync(ytDlpBinary, [
@@ -156,10 +184,10 @@ async function processAnalyzeVideo(job) {
   await execFileAsync(ffmpegBinary, ["-y", "-i", sourcePath, "-vn", "-acodec", "libmp3lame", "-ar", "16000", "-ac", "1", audioPath]);
 
   const audioStoragePath = `${video.id}/audio.mp3`;
+  await updateJob(job.id, "running", "uploading_audio", 43);
   await uploadFile(buckets.audio, audioStoragePath, audioPath, "audio/mpeg");
   await supabase.from("videos").update({ audio_path: audioStoragePath }).eq("id", video.id);
 
-  if (!openai) throw new Error("OPENAI_API_KEY is required for transcription.");
   await updateJob(job.id, "running", "transcribing", 50);
   await updateVideo(video.id, "transcribing", 50, "Transcribing audio with timestamps.");
   const transcript = await openai.audio.transcriptions.create({
@@ -169,23 +197,26 @@ async function processAnalyzeVideo(job) {
     timestamp_granularities: ["segment"]
   });
 
+  await updateJob(job.id, "running", "saving_transcript", 58);
+  const transcriptId = await saveTranscript(video.id, transcript);
+
   await updateJob(job.id, "running", "segmenting", 62);
   await updateVideo(video.id, "segmenting", 62, "Splitting transcript into 5-10 minute chunks.");
   const transcriptItems = toTranscriptItems(transcript);
-  const transcriptId = await saveTranscript(video.id, transcript);
   const segments = buildTranscriptSegments(transcriptItems, 600);
   await saveTranscriptSegments(video.id, transcriptId, segments);
 
-  await updateJob(job.id, "running", "analyzing", 75);
+  await updateJob(job.id, "running", "analyzing_segments", 75);
   await updateVideo(video.id, "analyzing", 75, "Analyzing transcript chunks for clip candidates.");
   const candidates = [];
   for (const segment of segments) {
     candidates.push(...(await analyzeTranscriptSegment(segment)));
   }
 
-  await updateJob(job.id, "running", "ranking", 90);
+  await updateJob(job.id, "running", "ranking_candidates", 90);
   await updateVideo(video.id, "ranking", 90, "Ranking the strongest moments.");
   const ranked = await rankCandidatesWithAi(candidates);
+  await updateJob(job.id, "running", "saving_clip_ideas", 95);
   await saveClipIdeas(video.id, ranked);
 
   await updateVideo(video.id, "ready", 100, `Ready with ${ranked.length} ranked clip ideas.`);
@@ -284,6 +315,14 @@ async function updateVideo(videoId, status, progressPercent, progressText, error
 }
 
 async function updateJob(jobId, status, step, progressPercent, errorMessage = null) {
+  activeStep = step;
+  console.log(`[claipper-worker] job ${jobId} ${status}: ${step} (${progressPercent}%)`);
+  await updateHeartbeat(status === "running" ? "busy" : "online", activeJobId, step);
+
+  const timestamps = {};
+  if (status === "completed") timestamps.completed_at = new Date().toISOString();
+  if (status === "failed") timestamps.failed_at = new Date().toISOString();
+
   await supabase
     .from("processing_jobs")
     .update({
@@ -292,20 +331,37 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
       step,
       progress_percent: progressPercent,
       error_message: errorMessage,
+      ...timestamps,
       updated_at: new Date().toISOString()
     })
     .eq("id", jobId);
 }
 
-async function failJob(job, message) {
-  console.error(`[claipper-worker] job ${job.id} failed`, message);
-  await updateJob(job.id, "failed", "failed", job.progress_percent ?? 0, message);
+async function failJob(job, error) {
+  const technicalError = cleanError(error);
+  const userError = userFriendlyWorkerError(error);
+  console.error(`[claipper-worker] job ${job.id} failed`, technicalError);
+  activeStep = "failed";
+  await supabase
+    .from("processing_jobs")
+    .update({
+      status: "failed",
+      current_step: "failed",
+      step: "failed",
+      progress_percent: job.progress_percent ?? 0,
+      error_message: userError,
+      technical_error: technicalError,
+      failed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", job.id);
   if (job.video_id) {
-    await updateVideo(job.video_id, "failed", 100, "Video processing failed. Try another file or format.", message);
+    await updateVideo(job.video_id, "failed", 100, userError, technicalError);
   }
   if (job.clip_id) {
     await supabase.from("clips").update({ render_status: "failed", updated_at: new Date().toISOString() }).eq("id", job.clip_id);
   }
+  await updateHeartbeat("online", null, "failed");
 }
 
 async function makeWorkDir(id) {
@@ -376,7 +432,6 @@ async function saveClipIdeas(videoId, ideas) {
 }
 
 async function analyzeTranscriptSegment(segment) {
-  if (!openai) throw new Error("OPENAI_API_KEY is required for AI analysis.");
   const completion = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
     response_format: { type: "json_object" },
@@ -533,4 +588,69 @@ function cleanError(error) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startupChecks() {
+  const [ffmpeg, ytdlp, supabaseConnected] = await Promise.all([
+    checkBinaryAvailability(ffmpegBinary, ["-version"]),
+    checkBinaryAvailability(ytDlpBinary, ["--version"]),
+    checkSupabaseConnection()
+  ]);
+
+  console.log(
+    formatStartupReport({
+      workerId,
+      supabaseConnected,
+      openAiPresent: Boolean(process.env.OPENAI_API_KEY),
+      ffmpeg,
+      ytdlp,
+      buckets,
+      pollIntervalMs,
+      environment: process.env.NODE_ENV ?? "development"
+    })
+  );
+
+  const missingRuntime = [];
+  if (!supabaseConnected) missingRuntime.push("Supabase connection failed");
+  if (!ffmpeg.ok) missingRuntime.push(`FFmpeg unavailable at ${ffmpeg.binary}`);
+  if (!ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
+  if (missingRuntime.length > 0) {
+    throw new Error(`Worker startup checks failed:\n${missingRuntime.join("\n")}`);
+  }
+}
+
+async function checkSupabaseConnection() {
+  const { error } = await supabase.from("processing_jobs").select("id").limit(1);
+  return !error;
+}
+
+async function updateHeartbeat(status, currentJobId, currentStep) {
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("worker_heartbeats").upsert(
+    {
+      worker_id: workerId,
+      status,
+      last_seen_at: now,
+      current_job_id: currentJobId,
+      current_step: currentStep,
+      metadata_json: {
+        ffmpeg: ffmpegBinary,
+        ytdlp: ytDlpBinary,
+        poll_interval_ms: pollIntervalMs,
+        environment: process.env.NODE_ENV ?? "development"
+      },
+      updated_at: now
+    },
+    { onConflict: "worker_id" }
+  );
+
+  if (error) {
+    console.error("[claipper-worker] heartbeat update failed", error.message);
+  }
+}
+
+async function shutdown(heartbeatTimer) {
+  clearInterval(heartbeatTimer);
+  await updateHeartbeat("offline", null, "shutdown");
+  process.exit(0);
 }

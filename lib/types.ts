@@ -114,6 +114,7 @@ export type StreamVideo = {
   progress_text: string | null;
   error_message: string | null;
   raw_data: Record<string, unknown> | null;
+  processing_jobs?: ProcessingJob[];
 };
 
 export type Transcript = {
@@ -172,8 +173,12 @@ export type ProcessingJob = {
   current_step?: string | null;
   attempts?: number | null;
   error_message: string | null;
+  technical_error?: string | null;
   worker_id?: string | null;
   locked_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  failed_at?: string | null;
   raw_data: Record<string, unknown> | null;
 };
 
@@ -196,4 +201,16 @@ export type StreamVideoDetail = StreamVideo & {
   clips?: Clip[];
   processing_jobs?: ProcessingJob[];
   video_imports?: VideoImport[];
+};
+
+export type WorkerHeartbeat = {
+  id: string;
+  worker_id: string;
+  status: string;
+  last_seen_at: string;
+  current_job_id: string | null;
+  current_step: string | null;
+  metadata_json: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string | null;
 };

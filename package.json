@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "worker:stream-scan": "node workers/stream-scan-worker.mjs"
+    "worker:stream-scan": "node workers/stream-scan-worker.mjs",
+    "worker:smoke-test": "node workers/stream-scan-smoke-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.1",

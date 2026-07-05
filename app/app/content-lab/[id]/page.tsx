@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, Play, WandSparkles } from "lucide-react";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
-import { createStorageSignedUrl, getStreamVideo } from "@/lib/supabase";
-import type { Clip, ClipIdea, ProcessingJob, StreamVideo } from "@/lib/types";
+import { createStorageSignedUrl, getLatestWorkerHeartbeat, getStreamVideo } from "@/lib/supabase";
+import { formatStep, formatWorkerLastSeen, isWorkerConnected } from "@/lib/worker-health";
+import type { Clip, ClipIdea, ProcessingJob, StreamVideo, WorkerHeartbeat } from "@/lib/types";
 
 export default async function StreamVideoDetailPage({
   params,
@@ -13,13 +14,14 @@ export default async function StreamVideoDetailPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const video = await getStreamVideo(id);
+  const [video, workerHeartbeat] = await Promise.all([getStreamVideo(id), getLatestWorkerHeartbeat()]);
   if (!video) notFound();
 
   const ideas = [...(video.clip_ideas ?? [])].sort((first, second) => second.score - first.score);
   const clips = await Promise.all((video.clips ?? []).map(async (clip) => ({ clip, previewUrl: await createStorageSignedUrl(clip.storage_bucket, clip.storage_path) })));
   const transcriptReady = (video.transcripts ?? []).some((transcript) => transcript.status === "ready");
   const latestJob = [...(video.processing_jobs ?? [])].sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+  const workerConnected = isWorkerConnected(workerHeartbeat);
 
   return (
     <AppShell title={video.title} eyebrow="Stream Scan">
@@ -40,12 +42,18 @@ export default async function StreamVideoDetailPage({
           <Card>
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <VideoStatusBadge status={video.status} />
+              <WorkerStatusBadge connected={workerConnected} />
+              {latestJob ? <Badge className="border-white/10 bg-white/5 text-slate-200">Job {latestJob.status}</Badge> : null}
               <Badge className="border-white/10 bg-white/5 text-slate-200">Transcript {transcriptReady ? "ready" : "pending"}</Badge>
               <Badge className="border-white/10 bg-white/5 text-slate-200">{ideas.length} ideas</Badge>
             </div>
             <h2 className="text-xl font-semibold text-white">{video.title}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">{video.progress_text ?? "Ready to process."}</p>
-            {video.error_message ? <p className="mt-3 text-sm leading-6 text-rose-200">{video.error_message}</p> : null}
+            {video.error_message || latestJob?.error_message ? (
+              <div className="mt-4 rounded-lg border border-rose-300/20 bg-rose-300/10 p-4 text-sm leading-6 text-rose-100">
+                {latestJob?.error_message ?? video.error_message}
+              </div>
+            ) : null}
             <div className="mt-5">
               <ProcessingTimeline status={video.status} />
             </div>
@@ -54,6 +62,7 @@ export default async function StreamVideoDetailPage({
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Current progress</p>
                   <p className="mt-1 text-sm font-semibold text-white">{latestJob ? formatJobStep(latestJob) : video.progress_text ?? "Waiting"}</p>
+                  <p className="mt-1 text-xs text-slate-500">Worker last seen {formatWorkerLastSeen(workerHeartbeat)}</p>
                 </div>
                 <p className="text-lg font-semibold text-emerald-200">{Math.max(0, Math.min(100, latestJob?.progress_percent ?? video.progress_percent ?? statusProgress(video.status)))}%</p>
               </div>
@@ -77,6 +86,10 @@ export default async function StreamVideoDetailPage({
               </button>
             </form>
           </Card>
+
+          {process.env.NODE_ENV !== "production" ? (
+            <DeveloperDebugPanel video={video} job={latestJob} worker={workerHeartbeat} />
+          ) : null}
 
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-white">Draft clips</h2>
@@ -168,6 +181,14 @@ function VideoStatusBadge({ status }: { status: StreamVideo["status"] }) {
   );
 }
 
+function WorkerStatusBadge({ connected }: { connected: boolean }) {
+  return (
+    <Badge className={connected ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}>
+      {connected ? "Worker connected" : "Worker not connected"}
+    </Badge>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.035] p-4">
@@ -235,7 +256,7 @@ function statusProgress(status: StreamVideo["status"]) {
 }
 
 function formatJobStep(job: ProcessingJob) {
-  return (job.current_step ?? job.step ?? job.status).replaceAll("_", " ");
+  return formatStep(job.current_step ?? job.step ?? job.status);
 }
 
 function formatDate(value: string) {
@@ -254,4 +275,34 @@ function formatSeconds(value: number) {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function DeveloperDebugPanel({ video, job, worker }: { video: StreamVideo & { transcripts?: unknown[]; transcript_segments?: unknown[]; clip_ideas?: unknown[] }; job?: ProcessingJob; worker: WorkerHeartbeat | null }) {
+  const rows = [
+    ["video id", video.id],
+    ["storage bucket", video.storage_bucket ?? "missing"],
+    ["storage path", video.storage_path ?? "missing"],
+    ["processing job id", job?.id ?? "none"],
+    ["worker id", job?.worker_id ?? worker?.worker_id ?? "none"],
+    ["current step", job?.current_step ?? job?.step ?? worker?.current_step ?? "none"],
+    ["progress", `${job?.progress_percent ?? video.progress_percent ?? 0}%`],
+    ["last error", job?.technical_error ?? job?.error_message ?? video.error_message ?? "none"],
+    ["transcript count", String(video.transcripts?.length ?? 0)],
+    ["transcript segment count", String(video.transcript_segments?.length ?? 0)],
+    ["clip ideas count", String(video.clip_ideas?.length ?? 0)]
+  ];
+
+  return (
+    <Card>
+      <h2 className="mb-4 text-lg font-semibold text-white">Developer debug</h2>
+      <div className="grid gap-2 text-xs">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid gap-1 rounded-md border border-white/10 bg-black/20 p-2 sm:grid-cols-[160px_1fr]">
+            <span className="uppercase tracking-[0.14em] text-slate-500">{label}</span>
+            <span className="break-all font-mono text-slate-200">{value}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }

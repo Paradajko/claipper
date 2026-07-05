@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { demoClips, demoScheduledPosts, demoSources } from "@/lib/demo-data";
-import type { ClipIdea, ClipStatus, ClipWithSchedule, ScheduledPost, SourceVideo, StreamVideo, StreamVideoDetail } from "@/lib/types";
+import type { ClipIdea, ClipStatus, ClipWithSchedule, ScheduledPost, SourceVideo, StreamVideo, StreamVideoDetail, WorkerHeartbeat } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -39,7 +39,7 @@ export async function getStreamVideos(): Promise<StreamVideo[]> {
 
   const { data, error } = await supabase
     .from("videos")
-    .select("*")
+    .select("*, processing_jobs(*)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -48,6 +48,25 @@ export async function getStreamVideos(): Promise<StreamVideo[]> {
   }
 
   return data as StreamVideo[];
+}
+
+export async function getLatestWorkerHeartbeat(): Promise<WorkerHeartbeat | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("worker_heartbeats")
+    .select("*")
+    .order("last_seen_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load worker heartbeat", error);
+    return null;
+  }
+
+  return data as WorkerHeartbeat | null;
 }
 
 export async function getStreamVideo(id: string): Promise<StreamVideoDetail | null> {
