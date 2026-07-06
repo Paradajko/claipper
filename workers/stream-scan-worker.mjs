@@ -118,6 +118,10 @@ async function runJob(job) {
     await processRenderDraft(job);
     return;
   }
+  if (job.job_type === "render_ready_clip") {
+    await processRenderReadyClip(job);
+    return;
+  }
   throw new Error(`Unsupported job type: ${job.job_type}`);
 }
 
@@ -219,6 +223,14 @@ async function processAnalyzeVideo(job) {
 }
 
 async function processRenderDraft(job) {
+  await processRenderClip(job, { ready: false });
+}
+
+async function processRenderReadyClip(job) {
+  await processRenderClip(job, { ready: true });
+}
+
+async function processRenderClip(job, { ready }) {
   if (!job.clip_id) throw new Error("Draft render job is missing clip_id.");
 
   const { data: clip, error: clipError } = await supabase.from("clips").select("*").eq("id", job.clip_id).single();
@@ -230,13 +242,18 @@ async function processRenderDraft(job) {
   const sourcePath = path.join(workDir, `source${path.extname(video.storage_path) || ".mp4"}`);
   const outputPath = path.join(workDir, `${clip.id}.mp4`);
   const duration = Math.max(1, Number(clip.end_seconds ?? 0) - Number(clip.start_seconds ?? 0));
+  const renderLabel = ready ? "ready clip" : "draft";
 
   await updateJob(job.id, "running", "downloading_source", 20);
   await supabase.from("clips").update({ render_status: "running" }).eq("id", clip.id);
   await downloadFile(video.storage_bucket, video.storage_path, sourcePath);
 
-  await updateJob(job.id, "running", "rendering_draft", 65);
-  try {
+  await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
+  if (ready) {
+    const segments = await loadTranscriptSegments(video.id, Number(clip.start_seconds ?? 0), Number(clip.end_seconds ?? 0));
+    const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, clip, segments) : null;
+    const videoFilters = buildReadyClipFilters(clip, subtitlePath);
+
     await execFileAsync(ffmpegBinary, [
       "-y",
       "-ss",
@@ -245,29 +262,56 @@ async function processRenderDraft(job) {
       sourcePath,
       "-t",
       String(duration),
-      "-c",
-      "copy",
-      "-movflags",
-      "+faststart",
-      outputPath
-    ]);
-  } catch {
-    await execFileAsync(ffmpegBinary, [
-      "-y",
-      "-ss",
-      String(clip.start_seconds ?? 0),
-      "-i",
-      sourcePath,
-      "-t",
-      String(duration),
+      "-vf",
+      videoFilters,
       "-c:v",
       "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "23",
       "-c:a",
       "aac",
+      "-b:a",
+      "128k",
       "-movflags",
       "+faststart",
       outputPath
     ]);
+  } else {
+    try {
+      await execFileAsync(ffmpegBinary, [
+        "-y",
+        "-ss",
+        String(clip.start_seconds ?? 0),
+        "-i",
+        sourcePath,
+        "-t",
+        String(duration),
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
+        outputPath
+      ]);
+    } catch {
+      await execFileAsync(ffmpegBinary, [
+        "-y",
+        "-ss",
+        String(clip.start_seconds ?? 0),
+        "-i",
+        sourcePath,
+        "-t",
+        String(duration),
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
+        outputPath
+      ]);
+    }
   }
 
   const storagePath = `${video.id}/${clip.id}.mp4`;
@@ -279,15 +323,110 @@ async function processRenderDraft(job) {
       storage_path: storagePath,
       file_path: storagePath,
       render_status: "completed",
+      status: ready ? "ready" : clip.status,
       exported_video_url: null,
+      raw_data: { ...(clip.raw_data ?? {}), render_type: ready ? "ready" : "draft", rendered_by: "railway_worker" },
       updated_at: new Date().toISOString()
     })
     .eq("id", clip.id);
 
   if (clip.clip_idea_id) {
-    await supabase.from("clip_ideas").update({ status: "drafted" }).eq("id", clip.clip_idea_id);
+    await supabase.from("clip_ideas").update({ status: ready ? "rendered" : "drafted" }).eq("id", clip.clip_idea_id);
   }
-  await updateJob(job.id, "completed", "completed", 100);
+  await updateJob(job.id, "completed", `${renderLabel}_completed`, 100);
+}
+
+async function loadTranscriptSegments(videoId, clipStart, clipEnd) {
+  const { data, error } = await supabase
+    .from("transcript_segments")
+    .select("start_time, end_time, text")
+    .eq("video_id", videoId)
+    .lt("start_time", clipEnd)
+    .gt("end_time", clipStart)
+    .order("start_time", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+async function buildSubtitleFile(workDir, clip, segments) {
+  const clipStart = Number(clip.start_seconds ?? 0);
+  const clipEnd = Number(clip.end_seconds ?? clipStart + 1);
+  const entries = segments
+    .map((segment) => {
+      const start = Math.max(0, Number(segment.start_time ?? 0) - clipStart);
+      const end = Math.min(clipEnd - clipStart, Number(segment.end_time ?? 0) - clipStart);
+      const text = normalizeSubtitleText(segment.text);
+      if (!text || end <= start) return null;
+      return { start, end, text };
+    })
+    .filter(Boolean);
+
+  if (entries.length === 0) return null;
+
+  const srt = entries
+    .map((entry, index) => [String(index + 1), `${formatSrtTime(entry.start)} --> ${formatSrtTime(entry.end)}`, entry.text].join("\n"))
+    .join("\n\n");
+  const subtitlePath = path.join(workDir, `${clip.id}.srt`);
+  await writeFile(subtitlePath, `${srt}\n`, "utf8");
+  return subtitlePath;
+}
+
+function buildReadyClipFilters(clip, subtitlePath) {
+  const hookText = String(clip.hook || clip.title || "Watch this").trim().slice(0, 120);
+  const filters = [
+    "scale=1080:1920:force_original_aspect_ratio=increase",
+    "crop=1080:1920",
+    `drawtext=text='${escapeDrawtextValue(hookText)}':fontcolor=white:fontsize=56:box=1:boxcolor=black@0.58:boxborderw=24:x=(w-text_w)/2:y=h*0.12:enable='between(t,0,3)'`
+  ];
+
+  if (subtitlePath) {
+    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=18,Alignment=2,MarginV=130,Outline=2,Shadow=1'`);
+  }
+
+  return filters.join(",");
+}
+
+function normalizeSubtitleText(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const words = text.split(" ");
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > 42 && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 2).join("\n");
+}
+
+function formatSrtTime(seconds) {
+  const milliseconds = Math.max(0, Math.round(seconds * 1000));
+  const hours = Math.floor(milliseconds / 3600000);
+  const minutes = Math.floor((milliseconds % 3600000) / 60000);
+  const wholeSeconds = Math.floor((milliseconds % 60000) / 1000);
+  const ms = milliseconds % 1000;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+}
+
+function escapeDrawtextValue(value) {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll(":", "\\:")
+    .replaceAll("'", "\\'")
+    .replaceAll("%", "\\%")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeFilterQuotedValue(value) {
+  return String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
 }
 
 async function loadVideo(videoId) {

@@ -141,12 +141,20 @@ function ClipIdeaCard({ idea }: { idea: ClipIdea }) {
         <p><span className="font-semibold text-white">Hook:</span> {idea.hook}</p>
         <p><span className="font-semibold text-white">Caption:</span> {idea.caption}</p>
       </div>
-      <form action={`/api/stream-scan/clip-ideas/${idea.id}/draft`} method="post" className="mt-5">
-        <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-300 sm:w-auto">
-          <Play className="h-3.5 w-3.5" />
-          Generate Draft
-        </button>
-      </form>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <form action={`/api/stream-scan/clip-ideas/${idea.id}/draft`} method="post">
+          <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-300 sm:w-auto">
+            <Play className="h-3.5 w-3.5" />
+            Generate Draft
+          </button>
+        </form>
+        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post">
+          <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/15 sm:w-auto">
+            <WandSparkles className="h-3.5 w-3.5" />
+            Generate Ready Clip
+          </button>
+        </form>
+      </div>
     </Card>
   );
 }
@@ -156,14 +164,14 @@ function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | 
     <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="font-semibold text-white">{clip.title ?? "Draft clip"}</h3>
+          <h3 className="font-semibold text-white">{clip.title ?? (clip.type === "ready" ? "Ready clip" : "Draft clip")}</h3>
           <p className="mt-1 text-sm text-slate-400">{formatRange(clip.start_seconds, clip.end_seconds)}</p>
-          <p className="mt-1 text-xs text-slate-500">Render status: {clip.render_status ?? clip.status}</p>
+          <p className="mt-1 text-xs text-slate-500">{clip.type === "ready" ? "Ready clip" : "Draft"} render status: {clip.render_status ?? clip.status}</p>
         </div>
         {previewUrl || clip.exported_video_url ? (
           <a href={previewUrl ?? clip.exported_video_url ?? "#"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">
             <Download className="h-3.5 w-3.5" />
-            Preview / download
+            {clip.type === "ready" ? "Download" : "Preview / download"}
           </a>
         ) : null}
       </div>

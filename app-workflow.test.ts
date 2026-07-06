@@ -73,6 +73,34 @@ describe("AI-first app workflow naming", () => {
     }
   });
 
+  it("lets users generate a ready vertical clip next to the draft action", () => {
+    const detailPage = read("app/app/content-lab/[id]/page.tsx");
+    const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
+
+    expect(detailPage).toContain("Generate Draft");
+    expect(detailPage).toContain("Generate Ready Clip");
+    expect(detailPage).toContain("/ready-clip");
+    expect(detailPage).toContain("Download");
+    expect(readyRoute).toContain('job_type: "render_ready_clip"');
+    expect(readyRoute).toContain('type: "ready"');
+    expect(readyRoute).toContain("storageBuckets.clips");
+  });
+
+  it("has the Railway worker render ready clips as 9:16 MP4s with hook and subtitle support", () => {
+    const worker = read("workers/stream-scan-worker.mjs");
+
+    expect(worker).toContain('job.job_type === "render_ready_clip"');
+    expect(worker).toContain("processRenderReadyClip");
+    expect(worker).toContain("1080:1920");
+    expect(worker).toContain("drawtext");
+    expect(worker).toContain("between(t,0,3)");
+    expect(worker).toContain("subtitles=");
+    expect(worker).toContain("loadTranscriptSegments");
+    expect(worker).toContain("buildSubtitleFile");
+    expect(worker).toContain("buckets.clips");
+    expect(worker).toContain("video/mp4");
+  });
+
   it("defines MyLaura Brief as a simple campaign-context analyzer", () => {
     const brief = read("app/app/mylaura-brief/page.tsx");
 
