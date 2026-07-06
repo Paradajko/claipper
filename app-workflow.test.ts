@@ -86,6 +86,27 @@ describe("AI-first app workflow naming", () => {
     expect(readyRoute).toContain("storageBuckets.clips");
   });
 
+  it("presents the video detail page as a clean Clip Review workspace", () => {
+    const detailPage = read("app/app/content-lab/[id]/page.tsx");
+
+    expect(detailPage).toContain("Clip Review");
+    expect(detailPage).toContain("Found moments");
+    expect(detailPage).toContain("Processing summary");
+    expect(detailPage).toContain("Uploaded");
+    expect(detailPage).toContain("Audio");
+    expect(detailPage).toContain("Transcript");
+    expect(detailPage).toContain("Analysis");
+    expect(detailPage).toContain("Ranked");
+    expect(detailPage).toContain("Ready");
+    expect(detailPage).toContain("Ranked moments");
+    expect(detailPage).toContain("Why it works");
+    expect(detailPage).toContain("Hook");
+    expect(detailPage).toContain("Caption");
+    expect(detailPage).toContain("idea, index");
+    expect(detailPage).toContain("lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.28fr)]");
+    expect(detailPage).toContain("video.status === \"ready\" ? \"order-1\"");
+  });
+
   it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {
     const worker = read("workers/stream-scan-worker.mjs");
 
