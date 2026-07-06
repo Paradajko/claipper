@@ -141,7 +141,7 @@ describe("AI-first app workflow naming", () => {
     expect(resetScript).toContain("DEVELOPMENT/TESTING ONLY");
     expect(resetScript).toContain("--confirm");
     expect(resetScript).toContain("SUPABASE_SERVICE_ROLE_KEY");
-    for (const table of ["clips", "clip_ideas", "transcript_segments", "transcripts", "processing_jobs", "video_imports", "videos"]) {
+    for (const table of ["clips", "clip_ideas", "transcript_segments", "transcripts", "processing_jobs", "video_imports", "videos", "scheduled_posts", "source_videos"]) {
       expect(resetScript).toContain(`"${table}"`);
     }
     for (const bucket of ["original-videos", "extracted-audio", "rendered-clips", "subtitles"]) {

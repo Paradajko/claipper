@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const CONFIRM_FLAG = "--confirm";
-const TABLES = ["clips", "clip_ideas", "transcript_segments", "transcripts", "processing_jobs", "video_imports", "videos"];
+const TABLES = ["clips", "clip_ideas", "transcript_segments", "transcripts", "processing_jobs", "video_imports", "videos", "scheduled_posts", "source_videos"];
 const OPTIONAL_TABLES = new Set(["video_imports"]);
 const BUCKETS = ["original-videos", "extracted-audio", "rendered-clips", "subtitles"];
 const OPTIONAL_BUCKETS = new Set(["subtitles"]);
@@ -12,7 +12,7 @@ loadDotEnv();
 
 if (!process.argv.includes(CONFIRM_FLAG)) {
   console.error("Claipper Stream Scan reset is DEVELOPMENT/TESTING ONLY.");
-  console.error(`This deletes Content Lab videos, clip ideas, jobs, transcripts, rendered clips, and related storage files.`);
+  console.error(`This deletes Content Lab videos, source videos, scheduled posts, clip ideas, jobs, transcripts, rendered clips, and related storage files.`);
   console.error(`Run explicitly with: npm run dev:reset-stream-scan -- ${CONFIRM_FLAG}`);
   process.exit(1);
 }
@@ -30,7 +30,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 });
 
 console.log("Claipper Stream Scan reset - DEVELOPMENT/TESTING ONLY");
-console.log("Deleting stream scan storage files and database rows. Users/auth/settings are not touched.");
+console.log("Deleting stream scan and test content storage files and database rows. Users/auth/settings are not touched.");
 
 const deleted = {
   storage: {},
