@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -47,6 +48,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (jobError) {
     return NextResponse.redirect(new URL(`/app/content-lab/${id}?error=${encodeURIComponent(jobError.message)}`, request.url), { status: 303 });
   }
+
+  revalidatePath(`/app/content-lab/${id}`);
+  revalidatePath("/app/content-lab");
 
   return NextResponse.redirect(new URL(`/app/content-lab/${id}`, request.url), { status: 303 });
 }
