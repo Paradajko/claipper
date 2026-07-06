@@ -21,7 +21,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
             <div className="min-w-0">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <Badge className="mb-3 border-cyan-300/25 bg-cyan-300/10 text-cyan-100">Content Lab</Badge>
+                  <Badge className="mb-3 border-emerald-300/25 bg-emerald-300/10 text-emerald-100">Content Lab</Badge>
                   <h2 className="text-2xl font-semibold tracking-tight text-white">Analyze long-form content</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
                     Upload directly to Supabase Storage or queue a YouTube, Kick or Twitch import for the worker.

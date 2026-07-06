@@ -1,17 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, CheckCircle2, FileText, Film, Link2, ListChecks, Radar, Scissors, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, Film, Link2, ListChecks, Sparkles } from "lucide-react";
 import { AppShell, Badge, Card } from "@/components/ui";
 import { getClips, getScheduledPosts, getSourceVideos } from "@/lib/supabase";
 
-const workflowSteps = [
-  { label: "Brief / Content", icon: FileText, active: true },
-  { label: "AI Analysis", icon: Radar },
-  { label: "Clip Ideas", icon: Sparkles },
-  { label: "Production", icon: Scissors },
-  { label: "Reports", icon: BarChart3 }
-];
-
 const briefSignals = ["Goal found", "Tone found", "CTA found", "Angles ready"];
+const momentChips = ["Reaction", "Strong opinion", "Payoff", "Hook", "Clip idea"];
 
 export default async function DashboardPage() {
   const [sources, clips, posts] = await Promise.all([getSourceVideos(), getClips(), getScheduledPosts()]);
@@ -30,49 +23,78 @@ export default async function DashboardPage() {
   return (
     <AppShell title="Dashboard" eyebrow="AI clipping workspace">
       <div className="flex flex-col gap-6">
-        <section className="dashboard-ambient order-2 rounded-lg border border-white/10 bg-slate-950/55 p-5 backdrop-blur-xl md:order-1 md:p-6">
-          <div className="grid gap-6 xl:grid-cols-[1fr_360px] xl:items-end">
+        <section className="moment-radar-hero dashboard-ambient order-2 rounded-lg border border-emerald-300/15 bg-slate-950/55 p-5 backdrop-blur-xl md:order-1 md:p-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center">
             <div>
-              <Badge className="border-cyan-300/25 bg-cyan-300/10 text-cyan-100">AI production workspace</Badge>
-              <h2 className="mt-4 max-w-3xl text-2xl font-semibold tracking-tight text-white md:text-4xl">Start with context. Finish with clips.</h2>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
-                Turn campaign context and long-form video into ranked clip ideas, drafts and ready outputs without switching tools.
-              </p>
+              <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">AI moment radar</Badge>
+              <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-white md:text-5xl">Find the moments worth clipping.</h2>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 md:text-base">Upload long-form content. Claipper detects the strongest moments.</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-black/20 p-3">
-              {stats.slice(0, 3).map((stat) => (
-                <div key={stat.label} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
-                  <p className="text-xs text-slate-500">{stat.label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{stat.value}</p>
-                </div>
+
+            <div className="moment-radar-visual relative min-h-72 overflow-hidden rounded-lg border border-emerald-300/15 bg-black/25 p-5">
+              <div className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/20" />
+              <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/15" />
+              <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-300/15" />
+              <div className="radar-sweep absolute left-1/2 top-1/2 h-28 w-1 origin-bottom rounded-full bg-gradient-to-t from-emerald-300/70 to-transparent" />
+              <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-300 shadow-[0_0_24px_rgba(16,185,129,.5)]" />
+              {momentChips.map((chip, index) => (
+                <span
+                  key={chip}
+                  className={[
+                    "absolute rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-100 shadow-[0_12px_40px_-28px_rgba(16,185,129,.8)]",
+                    index === 0 ? "left-6 top-8" : "",
+                    index === 1 ? "right-5 top-14" : "",
+                    index === 2 ? "bottom-8 left-10" : "",
+                    index === 3 ? "bottom-12 right-10" : "",
+                    index === 4 ? "left-1/2 top-1/2 -translate-x-1/2 translate-y-14" : ""
+                  ].join(" ")}
+                >
+                  {chip}
+                </span>
               ))}
             </div>
-          </div>
-
-          <div className="animated-flow-line relative mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {workflowSteps.map((step) => (
-              <div
-                key={step.label}
-                className={[
-                  "premium-hover relative z-10 flex min-h-24 flex-col justify-between rounded-lg border p-4 backdrop-blur",
-                  step.active
-                    ? "border-emerald-300/35 bg-emerald-300/[0.12] text-white"
-                    : "border-white/10 bg-black/25 text-slate-300"
-                ].join(" ")}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <step.icon className={step.active ? "h-5 w-5 text-emerald-200" : "h-5 w-5 text-cyan-200/80"} />
-                  <span className={step.active ? "h-2 w-2 rounded-full bg-emerald-300" : "h-2 w-2 rounded-full bg-white/20"} />
-                </div>
-                <p className="mt-4 text-sm font-semibold">{step.label}</p>
-              </div>
-            ))}
           </div>
         </section>
 
       <div className="order-1 grid gap-4 md:order-2 xl:grid-cols-2">
+        <Link href="/app/content-lab" className="group block">
+          <Card className="premium-hover h-full border-emerald-300/20 bg-emerald-300/[0.06] p-0 group-hover:border-emerald-400/40 group-hover:bg-emerald-400/[0.08]">
+            <div className="p-4">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Start with Content</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">Upload a video or paste a link. Claipper scans it and creates clip ideas without campaign context.</p>
+                </div>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
+                  <Link2 className="h-4 w-4" />
+                </div>
+              </div>
+
+              <div className="rounded-md border border-white/10 bg-black/15 p-3">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Video source</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-emerald-300" />
+                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Transcript</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-emerald-300" />
+                  <span className="rounded-md border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-emerald-100">Moments found</span>
+                </div>
+                <div className="relative h-9">
+                  <div className="absolute left-0 top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-slate-800" />
+                  {[22, 52, 79].map((left) => (
+                    <span key={left} className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-100/60 bg-emerald-300" style={{ left: `${left}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <span className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 sm:w-auto">
+                Start with Content <ArrowRight className="h-4 w-4" />
+              </span>
+            </div>
+          </Card>
+        </Link>
+
         <Link href="/app/mylaura-brief" className="group block">
-          <Card className="premium-hover h-full border-white/10 bg-white/[0.045] p-0 group-hover:border-emerald-400/35 group-hover:bg-emerald-400/[0.055]">
+          <Card className="premium-hover h-full border-white/10 bg-white/[0.04] p-0 group-hover:border-emerald-400/25 group-hover:bg-emerald-400/[0.045]">
             <div className="p-4">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
@@ -103,42 +125,6 @@ export default async function DashboardPage() {
 
               <span className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 sm:w-auto">
                 Start with Brief <ArrowRight className="h-4 w-4" />
-              </span>
-            </div>
-          </Card>
-        </Link>
-
-        <Link href="/app/content-lab" className="group block">
-          <Card className="premium-hover h-full border-white/10 bg-white/[0.045] p-0 group-hover:border-cyan-300/35 group-hover:bg-cyan-300/[0.05]">
-            <div className="p-4">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Start with Content</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">Upload a video or paste a link. Claipper scans it and creates clip ideas without campaign context.</p>
-                </div>
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
-                  <Link2 className="h-4 w-4" />
-                </div>
-              </div>
-
-              <div className="rounded-md border border-white/10 bg-black/15 p-3">
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Video source</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-emerald-300" />
-                  <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1">Transcript</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-emerald-300" />
-                  <span className="rounded-md border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-emerald-100">Moments found</span>
-                </div>
-                <div className="relative h-9">
-                  <div className="absolute left-0 top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-slate-800" />
-                  {[22, 52, 79].map((left) => (
-                    <span key={left} className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-100/60 bg-emerald-300" style={{ left: `${left}%` }} />
-                  ))}
-                </div>
-              </div>
-
-              <span className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 sm:w-auto">
-                Start with Content <ArrowRight className="h-4 w-4" />
               </span>
             </div>
           </Card>

@@ -44,7 +44,7 @@ export default async function StreamVideoDetailPage({
             </div>
             <div className="flex flex-wrap gap-2 lg:justify-end">
               <VideoStatusBadge status={video.status} />
-              <Badge className="border-cyan-300/25 bg-cyan-300/10 text-cyan-100">{ideas.length} Found moments</Badge>
+              <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">{ideas.length} Found moments</Badge>
               <WorkerStatusBadge connected={workerConnected} />
             </div>
           </div>
@@ -220,7 +220,7 @@ function FileInfoCard({ video, clipsCount }: { video: StreamVideoDetail; clipsCo
   return (
     <Card className="p-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-cyan-300/20 bg-cyan-300/10 text-cyan-200">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-emerald-300/20 bg-emerald-300/10 text-emerald-200">
           <FileVideo className="h-5 w-5" />
         </div>
         <div className="min-w-0">
@@ -272,7 +272,7 @@ function ClipIdeaCard({ idea, index }: { idea: ClipIdea; index: number }) {
           <div className="min-w-0">
             <h3 className="text-xl font-semibold leading-tight tracking-tight text-white">{idea.title}</h3>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Badge className="border-cyan-300/25 bg-cyan-300/10 text-cyan-100">{formatRange(idea.start_time, idea.end_time)}</Badge>
+              <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">{formatRange(idea.start_time, idea.end_time)}</Badge>
               <Badge className="border-lime-300/30 bg-lime-300/10 text-lime-100">Score {idea.score}</Badge>
               <Badge className="border-white/10 bg-white/5 text-slate-200">{idea.difficulty}</Badge>
               <Badge className="border-white/10 bg-white/5 text-slate-200">{idea.clip_type}</Badge>
@@ -326,9 +326,9 @@ function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | 
 
 function StateNotice({ children, title, tone = "default" }: { children: React.ReactNode; title: string; tone?: "default" | "error" }) {
   return (
-    <div className={clsx("rounded-lg border p-4", tone === "error" ? "border-rose-300/20 bg-rose-300/10" : "border-cyan-300/20 bg-cyan-300/10")}>
+    <div className={clsx("rounded-lg border p-4", tone === "error" ? "border-rose-300/20 bg-rose-300/10" : "border-emerald-300/20 bg-emerald-300/10")}>
       <div className="flex items-start gap-3">
-        <Sparkles className={clsx("mt-0.5 h-4 w-4", tone === "error" ? "text-rose-200" : "text-cyan-200")} />
+        <Sparkles className={clsx("mt-0.5 h-4 w-4", tone === "error" ? "text-rose-200" : "text-emerald-200")} />
         <div>
           <h3 className="text-sm font-semibold text-white">{title}</h3>
           <p className={clsx("mt-1 text-sm leading-6", tone === "error" ? "text-rose-100" : "text-slate-300")}>{children}</p>

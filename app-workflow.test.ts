@@ -25,15 +25,17 @@ describe("AI-first app workflow naming", () => {
     expect(shell).not.toContain("Sources");
   });
 
-  it("frames the dashboard around the AI clipping workflow", () => {
+  it("frames the dashboard around AI moment detection", () => {
     const dashboard = read("app/app/page.tsx");
 
-    expect(dashboard).toContain("Start with context. Finish with clips.");
-    expect(dashboard).toContain("Brief / Content");
-    expect(dashboard).toContain("AI Analysis");
+    expect(dashboard).toContain("Find the moments worth clipping.");
+    expect(dashboard).toContain("Upload long-form content. Claipper detects the strongest moments.");
+    expect(dashboard).toContain("AI moment radar");
+    expect(dashboard).toContain("Reaction");
+    expect(dashboard).toContain("Strong opinion");
+    expect(dashboard).toContain("Payoff");
+    expect(dashboard).toContain("Hook");
     expect(dashboard).toContain("Clip Ideas");
-    expect(dashboard).toContain("Production");
-    expect(dashboard).toContain("Reports");
     expect(dashboard).toContain("Start with MyLaura Brief");
     expect(dashboard).toContain("Start with Content");
     expect(dashboard).toContain("Goal found");
@@ -53,6 +55,8 @@ describe("AI-first app workflow naming", () => {
     expect(dashboard).toContain("order-4");
     expect(dashboard).not.toContain("Operator dashboard");
     expect(dashboard).not.toContain("MyLaura Brief → Content Lab → Clips → Schedule → Reports");
+    expect(dashboard).not.toContain("Brief / Content");
+    expect(dashboard).not.toContain("AI Analysis");
   });
 
   it("keeps Content Lab simple and AI-first", () => {
@@ -73,17 +77,25 @@ describe("AI-first app workflow naming", () => {
     }
   });
 
-  it("makes Dashboard and Content Lab feel premium, dynamic and unclipped", () => {
+  it("uses a green AI moment radar hero and keeps Dashboard and Content Lab on-brand", () => {
     const dashboard = read("app/app/page.tsx");
     const contentLab = read("app/app/content-lab/page.tsx");
     const ingest = read("components/content-lab-ingest.tsx");
     const css = read("app/globals.css");
 
-    expect(dashboard).toContain("dashboard-ambient");
-    expect(dashboard).toContain("animated-flow-line");
+    expect(dashboard).toContain("moment-radar-hero");
+    expect(dashboard).toContain("moment-radar-visual");
+    expect(dashboard).toContain("radar-sweep");
+    expect(dashboard).toContain("Find the moments worth clipping.");
+    expect(dashboard).toContain("Upload long-form content. Claipper detects the strongest moments.");
+    for (const chip of ["Reaction", "Strong opinion", "Payoff", "Hook", "Clip idea"]) {
+      expect(dashboard).toContain(chip);
+    }
+    expect(dashboard).not.toContain("animated-flow-line");
+    expect(dashboard).not.toContain("Start with context. Finish with clips.");
     expect(dashboard).toContain("premium-hover");
     expect(dashboard).toContain("Recent analyses");
-    expect(dashboard).toContain("Start with context. Finish with clips.");
+    expect(dashboard.indexOf("Start with Content")).toBeLessThan(dashboard.indexOf("Start with MyLaura Brief"));
     expect(contentLab).toContain("WorkerStatusStrip");
     expect(contentLab).toContain("content-lab-upload-shell");
     expect(contentLab).toContain("lg:grid-cols-[minmax(0,1fr)_360px]");
@@ -91,8 +103,12 @@ describe("AI-first app workflow naming", () => {
     expect(ingest).toContain("min-h-32");
     expect(ingest).toContain("content-lab-dropzone");
     expect(css).toContain("@keyframes ambient-shift");
-    expect(css).toContain("@keyframes flow-sweep");
+    expect(css).toContain("@keyframes radar-sweep");
     expect(css).toContain(".premium-hover");
+    for (const source of [dashboard, contentLab]) {
+      expect(source).not.toContain("cyan");
+      expect(source).not.toContain("blue");
+    }
   });
 
   it("lets users generate a ready vertical clip next to the draft action", () => {
