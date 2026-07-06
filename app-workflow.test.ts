@@ -100,38 +100,59 @@ describe("AI-first app workflow naming", () => {
     }
   });
 
-  it("lets users generate a ready vertical clip next to the draft action", () => {
+  it("lets users export a vertical clip and keep ready render as secondary", () => {
     const detailPage = read("app/app/content-lab/[id]/page.tsx");
+    const reviewClient = read("components/moment-review-client.tsx");
     const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
 
-    expect(detailPage).toContain("Generate Draft");
-    expect(detailPage).toContain("Generate Ready Clip");
-    expect(detailPage).toContain("/ready-clip");
-    expect(detailPage).toContain("Download");
+    expect(reviewClient).toContain("Export 9:16 Clip");
+    expect(reviewClient).toContain("/ready-clip");
+    expect(reviewClient).toContain("Render Ready MP4");
+    expect(reviewClient).toContain("Download");
+    expect(reviewClient.indexOf("Export 9:16 Clip")).toBeLessThan(reviewClient.indexOf("Render Ready MP4"));
+    expect(detailPage).not.toContain("Generate Draft");
     expect(readyRoute).toContain('job_type: "render_ready_clip"');
     expect(readyRoute).toContain('type: "ready"');
     expect(readyRoute).toContain("storageBuckets.clips");
   });
 
-  it("presents the video detail page as a clean Clip Review workspace", () => {
+  it("presents the video detail page as a clean Moment Review workspace with live updates", () => {
     const detailPage = read("app/app/content-lab/[id]/page.tsx");
+    const reviewClient = read("components/moment-review-client.tsx");
+    const videoRoute = read("app/api/stream-scan/videos/[id]/route.ts");
 
-    expect(detailPage).toContain("Clip Review");
-    expect(detailPage).toContain("Found moments");
-    expect(detailPage).toContain("Processing summary");
+    expect(detailPage).toContain("Moment Review");
+    expect(detailPage).toContain("MomentReviewClient");
+    expect(reviewClient).toContain("Moment Review");
+    expect(reviewClient).toContain("Found moments");
+    expect(reviewClient).toContain("Best moments");
+    expect(reviewClient).toContain("Run Analysis Again");
+    expect(reviewClient).toContain("Export 9:16 Clip");
+    expect(reviewClient).toContain("setInterval");
+    expect(reviewClient).toContain("2500");
+    expect(reviewClient).toContain(`/api/stream-scan/videos/$`);
+    expect(reviewClient).toContain("setSnapshot");
+    expect(reviewClient).toContain("shouldPoll");
+    expect(videoRoute).toContain("export async function GET");
+    expect(videoRoute).toContain("getStreamVideo");
+    expect(videoRoute).toContain("getLatestWorkerHeartbeat");
+    expect(videoRoute).toContain("createStorageSignedUrl");
+    expect(reviewClient).toContain("Why it works");
+    expect(reviewClient).toContain("Hook");
+    expect(reviewClient).toContain("Caption");
+    expect(reviewClient).toContain("idea, index");
     expect(detailPage).toContain("Uploaded");
     expect(detailPage).toContain("Audio");
     expect(detailPage).toContain("Transcript");
     expect(detailPage).toContain("Analysis");
     expect(detailPage).toContain("Ranked");
     expect(detailPage).toContain("Ready");
-    expect(detailPage).toContain("Ranked moments");
-    expect(detailPage).toContain("Why it works");
-    expect(detailPage).toContain("Hook");
-    expect(detailPage).toContain("Caption");
-    expect(detailPage).toContain("idea, index");
-    expect(detailPage).toContain("lg:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.28fr)]");
-    expect(detailPage).toContain("video.status === \"ready\" ? \"order-1\"");
+    expect(reviewClient).toContain("lg:grid-cols-[minmax(250px,0.42fr)_minmax(0,1.58fr)]");
+    expect(reviewClient).not.toContain("Clip Review");
+    expect(reviewClient).not.toContain("AI-selected clip ideas");
+    expect(reviewClient).not.toContain("Ranked moments");
+    expect(reviewClient).not.toContain("Run Stream Scan again");
+    expect(reviewClient).not.toContain("Developer debug");
   });
 
   it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {
