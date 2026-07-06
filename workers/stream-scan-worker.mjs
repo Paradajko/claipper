@@ -258,7 +258,8 @@ async function processRenderClip(job, { ready }) {
   if (ready) {
     const segments = await loadSubtitleSegments(video.id, Number(renderClip.start_seconds ?? 0), Number(renderClip.end_seconds ?? 0));
     const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, renderClip, segments) : null;
-    const videoFilters = buildReadyClipFilters(renderClip, subtitlePath);
+    const hookTextPath = await buildHookTextFile(workDir, renderClip);
+    const videoFilters = buildReadyClipFilters(hookTextPath, subtitlePath);
 
     await execFileAsync(ffmpegBinary, [
       "-hide_banner",
@@ -577,12 +578,18 @@ function chunkSubtitleWords(words) {
   return chunks;
 }
 
-function buildReadyClipFilters(clip, subtitlePath) {
+async function buildHookTextFile(workDir, clip) {
   const hookText = String(clip.hook || clip.title || "Watch this").trim().slice(0, 120);
+  const hookTextPath = path.join(workDir, `${clip.id}-hook.txt`);
+  await writeFile(hookTextPath, hookText, "utf8");
+  return hookTextPath;
+}
+
+function buildReadyClipFilters(hookTextPath, subtitlePath) {
   const filters = [
     "scale=720:1280:force_original_aspect_ratio=increase",
     "crop=720:1280",
-    `drawtext=text='${escapeDrawtextValue(hookText)}':fontcolor=white:fontsize=42:box=1:boxcolor=black@0.58:boxborderw=18:x=(w-text_w)/2:y=h*0.12:enable='between(t,0,3)'`
+    `drawtext=textfile='${escapeFilterQuotedValue(hookTextPath)}':fontcolor=white:fontsize=42:box=1:boxcolor=black@0.58:boxborderw=18:x=(w-text_w)/2:y=h*0.12:enable='between(t\\,0\\,3)'`
   ];
 
   if (subtitlePath) {
@@ -599,16 +606,6 @@ function formatSrtTime(seconds) {
   const wholeSeconds = Math.floor((milliseconds % 60000) / 1000);
   const ms = milliseconds % 1000;
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
-}
-
-function escapeDrawtextValue(value) {
-  return String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll(":", "\\:")
-    .replaceAll("'", "\\'")
-    .replaceAll("%", "\\%")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function escapeFilterQuotedValue(value) {

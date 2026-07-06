@@ -97,7 +97,10 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("\"-loglevel\"");
     expect(worker).toContain("\"error\"");
     expect(worker).toContain("drawtext");
-    expect(worker).toContain("between(t,0,3)");
+    expect(worker).toContain("buildHookTextFile");
+    expect(worker).toContain("textfile='");
+    expect(worker).not.toContain("drawtext=text=");
+    expect(worker).toContain("between(t\\\\,0\\\\,3)");
     expect(worker).toContain("subtitles=");
     expect(worker).toContain("loadSubtitleSegments");
     expect(worker).toContain("loadFineTranscriptSegments");
