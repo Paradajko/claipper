@@ -62,12 +62,12 @@ export function MomentReviewClient({
 
   return (
     <AppShell title={title} eyebrow="Content Lab">
-      <div className="space-y-5">
+      <div className="mx-auto max-w-6xl space-y-5">
         <Link href="/app/content-lab" className="inline-flex items-center gap-2 text-sm font-medium text-emerald-300 hover:text-emerald-200">
           <ArrowLeft size={16} /> Back to Content Lab
         </Link>
 
-        <section className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 shadow-[0_24px_90px_-64px_rgba(16,185,129,.5)] sm:px-5">
+        <section className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Moment Review</p>
@@ -85,68 +85,66 @@ export function MomentReviewClient({
         {error ? <StateNotice tone="error" title="Action failed">{error}</StateNotice> : null}
         {pollError ? <StateNotice tone="error" title="Live update paused">{pollError}</StateNotice> : null}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(250px,0.42fr)_minmax(0,1.58fr)] lg:items-start">
-          <aside className="space-y-4">
-            <StatusCard
-              latestJob={latestJob}
-              processing={processing}
-              progress={progress}
-              stepLabels={stepLabels}
-              video={video}
-              workerHeartbeat={workerHeartbeat}
-            />
+        <StatusProgressPanel
+          latestJob={latestJob}
+          processing={processing}
+          progress={progress}
+          stepLabels={stepLabels}
+          video={video}
+          workerHeartbeat={workerHeartbeat}
+        />
 
-            <Card className="p-4">
-              <h3 className="text-sm font-semibold text-white">Analysis</h3>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Use this when you want Claipper to look for moments again.</p>
-              <form action={`/api/stream-scan/videos/${video.id}/process`} method="post" className="mt-4">
-                <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15">
-                  <RefreshCw className="h-4 w-4" />
-                  Run Analysis Again
-                </button>
-              </form>
-            </Card>
-
-            <RenderedClipsCard clips={snapshot.clips} />
-          </aside>
-
-          <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] p-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Best moments</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Best moments</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Review the strongest timestamps, hooks and captions, then export the best vertical clip.</p>
-              </div>
-              <Badge className="w-fit border-white/10 bg-black/20 text-slate-200">{ideas.length} results</Badge>
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Best moments</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Best moments</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Review the strongest timestamps, hooks and captions, then export the best vertical clip.</p>
             </div>
+            <Badge className="w-fit border-white/10 bg-black/20 text-slate-200">{ideas.length} results</Badge>
+          </div>
 
-            {video.status === "failed" ? (
-              <StateNotice tone="error" title="Analysis failed">
-                {latestJob?.error_message ?? video.error_message ?? "The analysis failed. Run Analysis Again when the source file is ready."}
-              </StateNotice>
+          {video.status === "failed" ? (
+            <StateNotice tone="error" title="Analysis failed">
+              {latestJob?.error_message ?? video.error_message ?? "The analysis failed. Run Analysis Again when the source file is ready."}
+            </StateNotice>
+          ) : null}
+
+          {processing && ideas.length === 0 ? (
+            <StateNotice title="Analysis in progress">
+              Claipper is finding the best moments. Progress and results update here automatically.
+            </StateNotice>
+          ) : null}
+
+          <div className="grid gap-4">
+            {ideas.length > 0 ? (
+              ideas.map((idea, index) => <MomentCard key={idea.id} idea={idea} index={index} />)
+            ) : video.status !== "failed" && !processing ? (
+              <EmptyNotice>No moments yet. Run Analysis Again to find hooks, timestamps and captions.</EmptyNotice>
             ) : null}
+          </div>
+        </section>
 
-            {processing && ideas.length === 0 ? (
-              <StateNotice title="Analysis in progress">
-                Claipper is finding the best moments. Progress and results update here automatically.
-              </StateNotice>
-            ) : null}
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)]">
+          <Card className="border-white/10 bg-white/[0.035] p-4">
+            <h3 className="text-sm font-semibold text-white">Analysis</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Use this when you want Claipper to look for moments again.</p>
+            <form action={`/api/stream-scan/videos/${video.id}/process`} method="post" className="mt-4">
+              <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15 sm:w-auto">
+                <RefreshCw className="h-4 w-4" />
+                Run Analysis Again
+              </button>
+            </form>
+          </Card>
 
-            <div className="grid gap-4">
-              {ideas.length > 0 ? (
-                ideas.map((idea, index) => <MomentCard key={idea.id} idea={idea} index={index} />)
-              ) : video.status !== "failed" && !processing ? (
-                <EmptyNotice>No moments yet. Run Analysis Again to find hooks, timestamps and captions.</EmptyNotice>
-              ) : null}
-            </div>
-          </section>
-        </div>
+          <RenderedClipsCard clips={snapshot.clips} />
+        </section>
       </div>
     </AppShell>
   );
 }
 
-function StatusCard({
+function StatusProgressPanel({
   latestJob,
   processing,
   progress,
@@ -162,11 +160,14 @@ function StatusCard({
   workerHeartbeat: WorkerHeartbeat | null;
 }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
+    <Card className="border-white/10 bg-white/[0.035] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</p>
           <h3 className="mt-2 text-lg font-semibold text-white">{statusTitle(video.status)}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-400">
+            {processing ? (latestJob ? formatJobStep(latestJob) : video.progress_text ?? "Preparing analysis") : video.status === "ready" ? "Analysis is ready. Review the best moments." : video.status === "failed" ? "Something stopped the analysis." : "Ready when you run analysis."}
+          </p>
         </div>
         <p className="text-sm font-semibold text-emerald-200">{progress}%</p>
       </div>
@@ -178,12 +179,9 @@ function StatusCard({
           <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,.45)]" style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-3 text-sm font-medium text-white">{latestJob ? formatJobStep(latestJob) : video.progress_text ?? "Preparing analysis"}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">Last update {formatWorkerLastSeen(workerHeartbeat)}.</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">Last update {formatWorkerLastSeen(workerHeartbeat)}.</p>
         </div>
-      ) : (
-        <p className="mt-4 text-sm leading-6 text-slate-400">{video.status === "ready" ? "Analysis is ready. Review the best moments." : video.status === "failed" ? "Something stopped the analysis." : "Ready when you run analysis."}</p>
-      )}
+      ) : null}
     </Card>
   );
 }
@@ -210,7 +208,7 @@ function CompactStepper({ status, steps }: { status: StreamVideo["status"]; step
 
 function RenderedClipsCard({ clips }: { clips: Array<{ clip: Clip; previewUrl: string | null }> }) {
   return (
-    <Card className="p-4">
+    <Card className="border-white/10 bg-white/[0.035] p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-white">Downloads</h3>
         <Badge className="border-white/10 bg-white/5 text-slate-300">{clips.length}</Badge>
@@ -230,7 +228,7 @@ function RenderedClipsCard({ clips }: { clips: Array<{ clip: Clip; previewUrl: s
 
 function MomentCard({ idea, index }: { idea: ClipIdea; index: number }) {
   return (
-    <Card className="border-emerald-300/10 bg-white/[0.045] p-4 shadow-[0_24px_80px_-55px_rgba(16,185,129,.5)] sm:p-5">
+    <Card className="border-white/10 bg-white/[0.035] p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-emerald-300/25 bg-emerald-300/10 text-sm font-bold text-emerald-100">
@@ -305,7 +303,7 @@ function StateNotice({ children, title, tone = "default" }: { children: React.Re
 
 function LabeledText({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-black/20 p-3">
+    <div className="rounded-md bg-black/20 p-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300">{label}</p>
       <p className="mt-2 text-sm leading-6 text-slate-200">{children}</p>
     </div>

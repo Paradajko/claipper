@@ -147,7 +147,12 @@ describe("AI-first app workflow naming", () => {
     expect(detailPage).toContain("Analysis");
     expect(detailPage).toContain("Ranked");
     expect(detailPage).toContain("Ready");
-    expect(reviewClient).toContain("lg:grid-cols-[minmax(250px,0.42fr)_minmax(0,1.58fr)]");
+    expect(reviewClient).toContain("mx-auto max-w-6xl");
+    expect(reviewClient).toContain("StatusProgressPanel");
+    expect(reviewClient).toContain("MomentCard key={idea.id}");
+    expect(reviewClient.indexOf("Best moments")).toBeLessThan(reviewClient.indexOf("<RenderedClipsCard"));
+    expect(reviewClient).not.toContain("lg:grid-cols-[minmax(250px,0.42fr)_minmax(0,1.58fr)]");
+    expect(reviewClient).not.toContain("<aside");
     expect(reviewClient).not.toContain("Clip Review");
     expect(reviewClient).not.toContain("AI-selected clip ideas");
     expect(reviewClient).not.toContain("Ranked moments");
