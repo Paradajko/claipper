@@ -133,6 +133,24 @@ describe("AI-first app workflow naming", () => {
     expect(envExample).toContain("NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=1000");
   });
 
+  it("provides an explicit development-only stream scan reset script", () => {
+    const packageJson = read("package.json");
+    const resetScript = read("scripts/dev-reset-stream-scan.mjs");
+
+    expect(packageJson).toContain('"dev:reset-stream-scan": "node scripts/dev-reset-stream-scan.mjs"');
+    expect(resetScript).toContain("DEVELOPMENT/TESTING ONLY");
+    expect(resetScript).toContain("--confirm");
+    expect(resetScript).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    for (const table of ["clips", "clip_ideas", "transcript_segments", "transcripts", "processing_jobs", "video_imports", "videos"]) {
+      expect(resetScript).toContain(`"${table}"`);
+    }
+    for (const bucket of ["original-videos", "extracted-audio", "rendered-clips", "subtitles"]) {
+      expect(resetScript).toContain(`"${bucket}"`);
+    }
+    expect(resetScript).toContain("deleteStorageBucketContents");
+    expect(resetScript).toContain("deleteTableRows");
+  });
+
   it("defines MyLaura Brief as a simple campaign-context analyzer", () => {
     const brief = read("app/app/mylaura-brief/page.tsx");
 

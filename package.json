@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "dev:reset-stream-scan": "node scripts/dev-reset-stream-scan.mjs",
     "worker:stream-scan": "node workers/stream-scan-worker.mjs",
     "worker:smoke-test": "node workers/stream-scan-smoke-test.mjs"
   },
