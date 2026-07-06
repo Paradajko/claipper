@@ -52,14 +52,14 @@ export function ContentLabIngest() {
       if (!sessionResponse.ok) throw new Error(sessionPayload.error ?? "Could not create upload session.");
 
       const session = sessionPayload as UploadSession;
-      setMessage("Uploading directly to Supabase Storage.");
+      setMessage("Uploading video.");
       setProgress(15);
 
       await uploadWithProgress(session, file, (nextProgress) => {
         setProgress(Math.max(15, Math.min(92, nextProgress)));
       });
 
-      setMessage("Queueing video for processing.");
+      setMessage("Starting analysis.");
       setProgress(95);
 
       const completeResponse = await fetch("/api/stream-scan/upload-complete", {
@@ -84,7 +84,7 @@ export function ContentLabIngest() {
   async function importLink() {
     setBusy(true);
     setError(null);
-    setMessage("Queueing platform import.");
+    setMessage("Starting link analysis.");
 
     try {
       const response = await fetch("/api/stream-scan/import-link", {
@@ -120,26 +120,26 @@ export function ContentLabIngest() {
           onClick={() => setActiveTab("link")}
           className={activeTab === "link" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 transition hover:bg-white/[0.05]"}
         >
-          Import from link
+          Paste link
         </button>
       </div>
 
       {activeTab === "upload" ? (
         <div className="grid gap-4">
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} label="Video title" placeholder="Stream title or episode name" />
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} label="Video title" placeholder="Optional title" />
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="content-lab-dropzone grid min-h-32 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-5 text-left transition hover:border-emerald-400/35 hover:bg-emerald-400/[0.045]"
+            className="content-lab-dropzone grid min-h-44 gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-6 text-left transition hover:border-emerald-400/45 hover:bg-emerald-400/[0.07]"
           >
-            <span className="relative flex items-center gap-3 font-medium text-white">
-              <span className="flex h-10 w-10 items-center justify-center rounded-md border border-emerald-300/20 bg-emerald-300/10 text-emerald-200">
-                <UploadCloud className="h-5 w-5" />
+            <span className="relative flex flex-col gap-4 font-medium text-white sm:flex-row sm:items-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
+                <UploadCloud className="h-6 w-6" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate">{file ? file.name : "Choose video file"}</span>
-                <span className="mt-1 block text-sm font-normal text-slate-400">
-                  {fileSize ? `${fileSize} selected.` : "MP4, MOV, MKV or WEBM. Large files upload directly to Supabase Storage."}
+                <span className="block text-lg font-semibold">{file ? file.name : "Drop a video here"}</span>
+                <span className="mt-2 block text-sm font-normal text-slate-400">
+                  {fileSize ? `${fileSize} selected.` : "Choose an MP4, MOV, MKV or WEBM file to start finding clips."}
                 </span>
               </span>
             </span>
@@ -160,7 +160,7 @@ export function ContentLabIngest() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Upload and queue scan
+            Start analysis
           </button>
         </div>
       ) : (
@@ -168,7 +168,7 @@ export function ContentLabIngest() {
           <Input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} label="Video title" placeholder="Optional title" />
           <Input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} label="Platform link" placeholder="YouTube, Twitch or Kick URL" />
           <p className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-slate-400">
-            Platform imports are processed by the worker and may take longer for long videos.
+            Paste a public video link when the source is already online. Uploading a file is usually faster for long videos.
           </p>
           <button
             type="button"
@@ -177,7 +177,7 @@ export function ContentLabIngest() {
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Import with worker
+            Analyze link
           </button>
         </div>
       )}
@@ -203,7 +203,7 @@ function ProgressBar({ progress }: { progress: number }) {
       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
       </div>
-      <p className="text-xs text-slate-500">{progress > 0 ? `${progress}% uploaded / queued` : "Upload progress will appear here."}</p>
+      <p className="text-xs text-slate-500">{progress > 0 ? `${progress}% uploaded` : "Upload progress will appear here."}</p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Radio, Sparkles, UploadCloud } from "lucide-react";
+import { ArrowRight, ExternalLink, Radio, UploadCloud } from "lucide-react";
 import { ContentLabIngest } from "@/components/content-lab-ingest";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { getLatestWorkerHeartbeat, getSourceVideos, getStreamVideos, isSupabaseConfigured } from "@/lib/supabase";
@@ -14,23 +14,26 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
   return (
     <AppShell title="Content Lab" eyebrow="AI analysis">
       <div className="space-y-6">
-        <WorkerStatusStrip heartbeat={workerHeartbeat} connected={workerConnected} />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <Badge className="mb-3 border-emerald-300/20 bg-emerald-300/10 text-emerald-100">Content Lab</Badge>
+            <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">Upload content to find clips.</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Start with a video file or paste a link. Claipper will surface the strongest moments.</p>
+          </div>
+          <WorkerStatusStrip heartbeat={workerHeartbeat} connected={workerConnected} />
+        </div>
 
-        <section className="content-lab-upload-shell dashboard-ambient rounded-lg border border-white/10 bg-slate-950/55 p-4 backdrop-blur-xl md:p-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <Badge className="mb-3 border-emerald-300/25 bg-emerald-300/10 text-emerald-100">Content Lab</Badge>
-                  <h2 className="text-2xl font-semibold tracking-tight text-white">Analyze long-form content</h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                    Upload directly to Supabase Storage or queue a YouTube, Kick or Twitch import for the worker.
-                  </p>
-                </div>
-                <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10 text-emerald-200 sm:flex">
-                  <UploadCloud className="h-5 w-5" />
-                </div>
+        <section className="content-lab-upload-shell dashboard-ambient rounded-lg border border-emerald-300/15 bg-slate-950/55 p-4 backdrop-blur-xl md:p-6">
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-white">Start a new analysis</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Choose a video file for the fastest path, or paste a public link when the source is already online.</p>
               </div>
+              <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10 text-emerald-200 sm:flex">
+                <UploadCloud className="h-5 w-5" />
+              </div>
+            </div>
               {query.error ? (
                 <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
                   {query.error}
@@ -42,22 +45,6 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
                 </p>
               ) : null}
               <ContentLabIngest />
-            </div>
-
-            <aside className="rounded-lg border border-white/10 bg-black/20 p-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-emerald-300" />
-                <h3 className="text-sm font-semibold text-white">What happens next</h3>
-              </div>
-              <div className="mt-4 grid gap-3">
-                {["Upload or import", "Worker transcribes", "AI ranks moments", "Review clip ideas"].map((step, index) => (
-                  <div key={step} className="flex items-center gap-3 rounded-md border border-white/10 bg-white/[0.035] p-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-semibold text-emerald-100">{index + 1}</span>
-                    <span className="text-sm text-slate-300">{step}</span>
-                  </div>
-                ))}
-              </div>
-            </aside>
           </div>
         </section>
 
@@ -65,7 +52,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-white">Recent analyses</h2>
-              <p className="mt-1 text-sm text-slate-400">Uploads, imports and completed scans.</p>
+              <p className="mt-1 text-sm text-slate-400">Your latest videos and clip discovery runs.</p>
             </div>
             <Badge className="w-fit border-white/10 bg-white/5 text-slate-300">{streamVideos.length || sources.length} items</Badge>
           </div>
@@ -96,7 +83,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
               ))}
             </div>
           ) : (
-            <EmptyNotice>Add a video link or upload long-form content. Claipper will analyze it and turn it into clip ideas.</EmptyNotice>
+            <EmptyNotice>Upload a video or paste a link to create your first clip ideas.</EmptyNotice>
           )}
         </section>
       </div>
@@ -106,30 +93,24 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
 
 function WorkerStatusStrip({ heartbeat, connected }: { heartbeat: WorkerHeartbeat | null; connected: boolean }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur-xl">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
+    <div className="w-full rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 backdrop-blur-xl sm:w-auto">
+      <div className="flex items-center justify-between gap-3 sm:justify-start">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
             <Radio className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-white">Processing worker</h2>
-            <p className="mt-0.5 truncate text-xs text-slate-500">
-              {connected
-                ? heartbeat?.current_job_id
-                  ? `Current job: ${formatStep(heartbeat.current_step)}`
-                  : "Online and polling for queued jobs."
-                : "Offline. Uploaded videos wait in queue."}
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Processing</p>
+            <p className="mt-0.5 max-w-48 truncate text-sm font-medium text-white">
+              {connected ? (heartbeat?.current_job_id ? formatStep(heartbeat.current_step) : "Ready") : "Waiting"}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-            <Badge className={connected ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}>
-              {connected ? "Worker connected" : "Worker not connected"}
-            </Badge>
-            <Badge className="border-white/10 bg-white/5 text-slate-200">Last seen {formatWorkerLastSeen(heartbeat)}</Badge>
-        </div>
+        <Badge className={connected ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}>
+          {connected ? "Online" : "Offline"}
+        </Badge>
       </div>
+      <p className="mt-2 text-xs text-slate-500">Last seen {formatWorkerLastSeen(heartbeat)}</p>
     </div>
   );
 }

@@ -85,26 +85,6 @@ a {
   }
 }
 
-@keyframes flow-sweep {
-  from {
-    transform: translateX(-45%);
-  }
-
-  to {
-    transform: translateX(145%);
-  }
-}
-
-@keyframes radar-sweep {
-  from {
-    transform: translate(-50%, -100%) rotate(0deg);
-  }
-
-  to {
-    transform: translate(-50%, -100%) rotate(360deg);
-  }
-}
-
 .dashboard-ambient {
   position: relative;
   overflow: hidden;
@@ -123,24 +103,6 @@ a {
   filter: blur(18px);
   animation: ambient-shift 12s ease-in-out infinite;
   z-index: -1;
-}
-
-.animated-flow-line {
-  position: relative;
-  overflow: hidden;
-}
-
-.animated-flow-line::after {
-  position: absolute;
-  inset: 50% 0 auto 0;
-  height: 1px;
-  content: "";
-  background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.72), rgba(16, 185, 129, 0.72), transparent);
-  animation: flow-sweep 5.5s linear infinite;
-}
-
-.radar-sweep {
-  animation: radar-sweep 7s linear infinite;
 }
 
 .premium-hover {

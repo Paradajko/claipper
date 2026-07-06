@@ -25,34 +25,24 @@ describe("AI-first app workflow naming", () => {
     expect(shell).not.toContain("Sources");
   });
 
-  it("frames the dashboard around AI moment detection", () => {
+  it("frames the dashboard as a focused clipping start page", () => {
     const dashboard = read("app/app/page.tsx");
 
-    expect(dashboard).toContain("Find the moments worth clipping.");
-    expect(dashboard).toContain("Upload long-form content. Claipper detects the strongest moments.");
-    expect(dashboard).toContain("AI moment radar");
-    expect(dashboard).toContain("Reaction");
-    expect(dashboard).toContain("Strong opinion");
-    expect(dashboard).toContain("Payoff");
-    expect(dashboard).toContain("Hook");
+    expect(dashboard).toContain("Find clips in minutes.");
+    expect(dashboard).toContain("Upload a long video, paste a link, or start from campaign context.");
+    expect(dashboard).toContain("Upload content");
+    expect(dashboard).toContain("Start from brief");
     expect(dashboard).toContain("Clip Ideas");
-    expect(dashboard).toContain("Start with MyLaura Brief");
-    expect(dashboard).toContain("Start with Content");
-    expect(dashboard).toContain("Goal found");
-    expect(dashboard).toContain("Tone found");
-    expect(dashboard).toContain("CTA found");
-    expect(dashboard).toContain("Angles ready");
-    expect(dashboard).toContain("Video source");
-    expect(dashboard).toContain("Transcript");
-    expect(dashboard).toContain("Moments found");
     expect(dashboard).toContain("Content Runs");
     expect(dashboard).toContain("Ready Clips");
     expect(dashboard).toContain("Recent analyses");
     expect(dashboard).toContain("No analyses yet.");
-    expect(dashboard).toContain("order-1");
-    expect(dashboard).toContain("order-2");
-    expect(dashboard).toContain("order-3");
-    expect(dashboard).toContain("order-4");
+    expect(dashboard).toContain("clip-start-hero");
+    expect(dashboard).toContain("clip-action-card");
+    expect(dashboard.indexOf("Upload content")).toBeLessThan(dashboard.indexOf("Start from brief"));
+    expect(dashboard).not.toContain("moment-radar-hero");
+    expect(dashboard).not.toContain("moment-radar-visual");
+    expect(dashboard).not.toContain("radar-sweep");
     expect(dashboard).not.toContain("Operator dashboard");
     expect(dashboard).not.toContain("MyLaura Brief → Content Lab → Clips → Schedule → Reports");
     expect(dashboard).not.toContain("Brief / Content");
@@ -64,46 +54,45 @@ describe("AI-first app workflow naming", () => {
     const ingest = read("components/content-lab-ingest.tsx");
 
     expect(contentLab).toContain("Content Lab");
-    expect(contentLab).toContain("Add a video link or upload long-form content. Claipper will analyze it and turn it into clip ideas.");
-    expect(contentLab).toContain("directly to Supabase Storage");
+    expect(contentLab).toContain("Upload content to find clips.");
+    expect(contentLab).toContain("Start with a video file or paste a link. Claipper will surface the strongest moments.");
+    expect(contentLab).toContain("content-lab-upload-shell");
+    expect(contentLab).toContain("WorkerStatusStrip");
     expect(ingest).toContain("Upload video");
-    expect(ingest).toContain("Import from link");
+    expect(ingest).toContain("Paste link");
     expect(ingest).toContain("Platform link");
-    expect(ingest).toContain("Upload and queue scan");
-    expect(ingest).toContain("Import with worker");
+    expect(ingest).toContain("Drop a video here");
+    expect(ingest).toContain("Start analysis");
+    expect(ingest).toContain("Analyze link");
 
-    for (const manualField of ["Duration seconds", "Transcript"]) {
+    for (const manualField of ["Duration seconds", "Transcript", "directly to Supabase Storage", "queue a YouTube"]) {
       expect(contentLab).not.toContain(manualField);
     }
   });
 
-  it("uses a green AI moment radar hero and keeps Dashboard and Content Lab on-brand", () => {
+  it("keeps Dashboard and Content Lab green, premium and uncluttered", () => {
     const dashboard = read("app/app/page.tsx");
     const contentLab = read("app/app/content-lab/page.tsx");
     const ingest = read("components/content-lab-ingest.tsx");
     const css = read("app/globals.css");
 
-    expect(dashboard).toContain("moment-radar-hero");
-    expect(dashboard).toContain("moment-radar-visual");
-    expect(dashboard).toContain("radar-sweep");
-    expect(dashboard).toContain("Find the moments worth clipping.");
-    expect(dashboard).toContain("Upload long-form content. Claipper detects the strongest moments.");
-    for (const chip of ["Reaction", "Strong opinion", "Payoff", "Hook", "Clip idea"]) {
-      expect(dashboard).toContain(chip);
-    }
+    expect(dashboard).toContain("clip-start-hero");
+    expect(dashboard).toContain("Find clips in minutes.");
+    expect(dashboard).toContain("Upload content");
+    expect(dashboard).toContain("Start from brief");
     expect(dashboard).not.toContain("animated-flow-line");
+    expect(dashboard).not.toContain("moment-radar-visual");
     expect(dashboard).not.toContain("Start with context. Finish with clips.");
     expect(dashboard).toContain("premium-hover");
     expect(dashboard).toContain("Recent analyses");
-    expect(dashboard.indexOf("Start with Content")).toBeLessThan(dashboard.indexOf("Start with MyLaura Brief"));
+    expect(dashboard.indexOf("Upload content")).toBeLessThan(dashboard.indexOf("Start from brief"));
     expect(contentLab).toContain("WorkerStatusStrip");
     expect(contentLab).toContain("content-lab-upload-shell");
-    expect(contentLab).toContain("lg:grid-cols-[minmax(0,1fr)_360px]");
+    expect(contentLab).not.toContain("lg:grid-cols-[minmax(0,1fr)_360px]");
     expect(contentLab).toContain("Recent analyses");
-    expect(ingest).toContain("min-h-32");
+    expect(ingest).toContain("min-h-44");
     expect(ingest).toContain("content-lab-dropzone");
     expect(css).toContain("@keyframes ambient-shift");
-    expect(css).toContain("@keyframes radar-sweep");
     expect(css).toContain(".premium-hover");
     for (const source of [dashboard, contentLab]) {
       expect(source).not.toContain("cyan");
