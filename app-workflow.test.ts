@@ -99,8 +99,17 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("drawtext");
     expect(worker).toContain("between(t,0,3)");
     expect(worker).toContain("subtitles=");
-    expect(worker).toContain("loadTranscriptSegments");
+    expect(worker).toContain("loadSubtitleSegments");
+    expect(worker).toContain("loadFineTranscriptSegments");
     expect(worker).toContain("buildSubtitleFile");
+    expect(worker).toContain("MAX_SUBTITLE_WORDS = 3");
+    expect(worker).toContain("buildSubtitleCues");
+    expect(worker).toContain("refineReadyClipTiming");
+    expect(worker).toContain("20-60 seconds");
+    expect(worker).toContain("avoid irrelevant intro");
+    expect(worker).toContain("clear sentence/payoff");
+    expect(worker).toContain("segments_json");
+    expect(worker).toContain("MarginV=220");
     expect(worker).toContain("buckets.clips");
     expect(worker).toContain("video/mp4");
   });

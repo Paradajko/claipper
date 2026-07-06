@@ -30,6 +30,11 @@ const workerId = process.env.WORKER_ID;
 const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS);
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
+const READY_CLIP_MIN_SECONDS = 20;
+const READY_CLIP_MAX_SECONDS = 60;
+const MAX_SUBTITLE_WORDS = 3;
+const MIN_SUBTITLE_SECONDS = 0.6;
+const MAX_SUBTITLE_SECONDS = 1.6;
 const buckets = {
   originals: process.env.STORAGE_BUCKET_ORIGINALS,
   audio: process.env.STORAGE_BUCKET_AUDIO,
@@ -237,22 +242,23 @@ async function processRenderClip(job, { ready }) {
   if (clipError || !clip) throw new Error(clipError?.message ?? "Clip not found.");
   const video = await loadVideo(clip.video_id);
   if (!video.storage_bucket || !video.storage_path) throw new Error("Video is missing Supabase Storage source path.");
+  const renderClip = ready ? await refineReadyClipTiming(video.id, clip) : clip;
 
   const workDir = await makeWorkDir(video.id);
   const sourcePath = path.join(workDir, `source${path.extname(video.storage_path) || ".mp4"}`);
-  const outputPath = path.join(workDir, `${clip.id}.mp4`);
-  const duration = Math.max(1, Number(clip.end_seconds ?? 0) - Number(clip.start_seconds ?? 0));
+  const outputPath = path.join(workDir, `${renderClip.id}.mp4`);
+  const duration = Math.max(1, Number(renderClip.end_seconds ?? 0) - Number(renderClip.start_seconds ?? 0));
   const renderLabel = ready ? "ready clip" : "draft";
 
   await updateJob(job.id, "running", "downloading_source", 20);
-  await supabase.from("clips").update({ render_status: "running" }).eq("id", clip.id);
+  await supabase.from("clips").update({ render_status: "running" }).eq("id", renderClip.id);
   await downloadFile(video.storage_bucket, video.storage_path, sourcePath);
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
-    const segments = await loadTranscriptSegments(video.id, Number(clip.start_seconds ?? 0), Number(clip.end_seconds ?? 0));
-    const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, clip, segments) : null;
-    const videoFilters = buildReadyClipFilters(clip, subtitlePath);
+    const segments = await loadSubtitleSegments(video.id, Number(renderClip.start_seconds ?? 0), Number(renderClip.end_seconds ?? 0));
+    const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, renderClip, segments) : null;
+    const videoFilters = buildReadyClipFilters(renderClip, subtitlePath);
 
     await execFileAsync(ffmpegBinary, [
       "-hide_banner",
@@ -260,7 +266,7 @@ async function processRenderClip(job, { ready }) {
       "error",
       "-y",
       "-ss",
-      String(clip.start_seconds ?? 0),
+      String(renderClip.start_seconds ?? 0),
       "-i",
       sourcePath,
       "-t",
@@ -286,7 +292,7 @@ async function processRenderClip(job, { ready }) {
       await execFileAsync(ffmpegBinary, [
         "-y",
         "-ss",
-        String(clip.start_seconds ?? 0),
+        String(renderClip.start_seconds ?? 0),
         "-i",
         sourcePath,
         "-t",
@@ -301,7 +307,7 @@ async function processRenderClip(job, { ready }) {
       await execFileAsync(ffmpegBinary, [
         "-y",
         "-ss",
-        String(clip.start_seconds ?? 0),
+        String(renderClip.start_seconds ?? 0),
         "-i",
         sourcePath,
         "-t",
@@ -326,17 +332,182 @@ async function processRenderClip(job, { ready }) {
       storage_path: storagePath,
       file_path: storagePath,
       render_status: "completed",
-      status: ready ? "ready" : clip.status,
+      status: ready ? "ready" : renderClip.status,
       exported_video_url: null,
-      raw_data: { ...(clip.raw_data ?? {}), render_type: ready ? "ready" : "draft", rendered_by: "railway_worker" },
+      raw_data: { ...(renderClip.raw_data ?? {}), render_type: ready ? "ready" : "draft", rendered_by: "railway_worker" },
       updated_at: new Date().toISOString()
     })
-    .eq("id", clip.id);
+    .eq("id", renderClip.id);
 
-  if (clip.clip_idea_id) {
-    await supabase.from("clip_ideas").update({ status: ready ? "rendered" : "drafted" }).eq("id", clip.clip_idea_id);
+  if (renderClip.clip_idea_id) {
+    await supabase.from("clip_ideas").update({ status: ready ? "rendered" : "drafted" }).eq("id", renderClip.clip_idea_id);
   }
   await updateJob(job.id, "completed", `${renderLabel}_completed`, 100);
+}
+
+async function refineReadyClipTiming(videoId, clip) {
+  const originalStart = Number(clip.start_seconds ?? 0);
+  const originalEnd = Number(clip.end_seconds ?? originalStart + READY_CLIP_MIN_SECONDS);
+  const contextStart = Math.max(0, originalStart - 20);
+  const contextEnd = originalEnd + 20;
+  const contextSegments = await loadFineTranscriptSegments(videoId, contextStart, contextEnd);
+  if (contextSegments.length === 0) return clip;
+
+  const refined = await refineTimingWithAi(clip, contextSegments, contextStart, contextEnd).catch((error) => {
+    console.warn("[claipper-worker] ready clip timing refinement skipped", cleanError(error));
+    return null;
+  });
+  const fallback = refined ?? refineTimingFromTranscriptBounds(clip, contextSegments);
+  if (!fallback) return clip;
+
+  const nextStart = roundSeconds(fallback.start_seconds);
+  const nextEnd = roundSeconds(fallback.end_seconds);
+  if (Math.abs(nextStart - originalStart) < 0.1 && Math.abs(nextEnd - originalEnd) < 0.1) return clip;
+
+  const rawData = {
+    ...(clip.raw_data ?? {}),
+    timing_refined_by: refined ? "ai_ready_clip_worker" : "transcript_bounds",
+    timing_refined_at: new Date().toISOString(),
+    original_start_seconds: originalStart,
+    original_end_seconds: originalEnd,
+    timing_refinement_reason: fallback.reason ?? null
+  };
+
+  const { data, error } = await supabase
+    .from("clips")
+    .update({
+      start_seconds: nextStart,
+      end_seconds: nextEnd,
+      duration_seconds: nextEnd - nextStart,
+      raw_data: rawData,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", clip.id)
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    console.warn("[claipper-worker] ready clip timing refinement save failed", error?.message ?? "missing updated clip");
+    return { ...clip, start_seconds: nextStart, end_seconds: nextEnd, duration_seconds: nextEnd - nextStart, raw_data: rawData };
+  }
+
+  return data;
+}
+
+async function refineTimingWithAi(clip, contextSegments, contextStart, contextEnd) {
+  const originalStart = Number(clip.start_seconds ?? contextStart);
+  const originalEnd = Number(clip.end_seconds ?? originalStart + READY_CLIP_MIN_SECONDS);
+  const context = contextSegments
+    .map((segment) => `${segment.start.toFixed(1)}-${segment.end.toFixed(1)}: ${segment.text}`)
+    .join("\n")
+    .slice(0, 9000);
+
+  const completion = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content:
+          "Refine short-form clip timing for TikTok/Reels. Return only JSON. Choose exact absolute seconds. Keep clips 20-60 seconds. Start close to the strongest moment; avoid irrelevant intro. End after a clear sentence/payoff, not mid-thought."
+      },
+      {
+        role: "user",
+        content: [
+          `Original clip: ${originalStart.toFixed(1)}-${originalEnd.toFixed(1)}`,
+          `Allowed context: ${contextStart.toFixed(1)}-${contextEnd.toFixed(1)}`,
+          "Return {\"start_seconds\":number,\"end_seconds\":number,\"reason\":\"short explanation\"}.",
+          "Prefer 20-60 seconds, avoid irrelevant intro, and end after a clear sentence/payoff.",
+          "Transcript context:",
+          context
+        ].join("\n\n")
+      }
+    ],
+    temperature: 0.1,
+    max_tokens: 300
+  });
+
+  const parsed = JSON.parse(completion.choices[0]?.message.content ?? "{}");
+  return constrainReadyClipTiming(
+    {
+      start_seconds: Number(parsed.start_seconds),
+      end_seconds: Number(parsed.end_seconds),
+      reason: String(parsed.reason ?? "AI timing refinement")
+    },
+    { contextStart, contextEnd, originalStart, originalEnd }
+  );
+}
+
+function refineTimingFromTranscriptBounds(clip, contextSegments) {
+  const originalStart = Number(clip.start_seconds ?? 0);
+  const originalEnd = Number(clip.end_seconds ?? originalStart + READY_CLIP_MIN_SECONDS);
+  const overlapping = contextSegments.filter((segment) => segment.end > originalStart && segment.start < originalEnd);
+  if (overlapping.length === 0) return null;
+  return constrainReadyClipTiming(
+    {
+      start_seconds: Math.max(originalStart, overlapping[0].start),
+      end_seconds: Math.min(originalEnd, overlapping[overlapping.length - 1].end),
+      reason: "Trimmed to transcript segment boundaries"
+    },
+    { contextStart: Math.max(0, originalStart - 20), contextEnd: originalEnd + 20, originalStart, originalEnd }
+  );
+}
+
+function constrainReadyClipTiming(candidate, bounds) {
+  if (!Number.isFinite(candidate.start_seconds) || !Number.isFinite(candidate.end_seconds)) return null;
+  let start = Math.max(bounds.contextStart, Math.min(candidate.start_seconds, bounds.contextEnd - READY_CLIP_MIN_SECONDS));
+  let end = Math.max(start + READY_CLIP_MIN_SECONDS, Math.min(candidate.end_seconds, bounds.contextEnd));
+  if (end - start > READY_CLIP_MAX_SECONDS) end = start + READY_CLIP_MAX_SECONDS;
+  if (end > bounds.contextEnd) {
+    end = bounds.contextEnd;
+    start = Math.max(bounds.contextStart, end - READY_CLIP_MAX_SECONDS);
+  }
+  if (end <= start) return null;
+  return { start_seconds: start, end_seconds: end, reason: candidate.reason };
+}
+
+function roundSeconds(value) {
+  return Math.round(value * 10) / 10;
+}
+
+async function loadSubtitleSegments(videoId, clipStart, clipEnd) {
+  const fineSegments = await loadFineTranscriptSegments(videoId, clipStart, clipEnd);
+  if (fineSegments.length > 0) return fineSegments;
+
+  const broadSegments = await loadTranscriptSegments(videoId, clipStart, clipEnd);
+  return broadSegments.map((segment) => ({
+    start: Number(segment.start_time ?? clipStart),
+    end: Number(segment.end_time ?? clipEnd),
+    text: String(segment.text ?? "")
+  }));
+}
+
+async function loadFineTranscriptSegments(videoId, clipStart, clipEnd) {
+  const { data, error } = await supabase
+    .from("transcripts")
+    .select("segments_json")
+    .eq("video_id", videoId)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .flatMap((transcript) => parseTranscriptJsonSegments(transcript.segments_json))
+    .filter((segment) => segment.end > clipStart && segment.start < clipEnd)
+    .sort((first, second) => first.start - second.start);
+}
+
+function parseTranscriptJsonSegments(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((segment) => ({
+      start: Number(segment?.start ?? segment?.start_time ?? 0),
+      end: Number(segment?.end ?? segment?.end_time ?? segment?.start ?? 0),
+      text: String(segment?.text ?? "").replace(/\s+/g, " ").trim()
+    }))
+    .filter((segment) => segment.text && Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start);
 }
 
 async function loadTranscriptSegments(videoId, clipStart, clipEnd) {
@@ -355,15 +526,7 @@ async function loadTranscriptSegments(videoId, clipStart, clipEnd) {
 async function buildSubtitleFile(workDir, clip, segments) {
   const clipStart = Number(clip.start_seconds ?? 0);
   const clipEnd = Number(clip.end_seconds ?? clipStart + 1);
-  const entries = segments
-    .map((segment) => {
-      const start = Math.max(0, Number(segment.start_time ?? 0) - clipStart);
-      const end = Math.min(clipEnd - clipStart, Number(segment.end_time ?? 0) - clipStart);
-      const text = normalizeSubtitleText(segment.text);
-      if (!text || end <= start) return null;
-      return { start, end, text };
-    })
-    .filter(Boolean);
+  const entries = buildSubtitleCues(segments, clipStart, clipEnd);
 
   if (entries.length === 0) return null;
 
@@ -375,6 +538,45 @@ async function buildSubtitleFile(workDir, clip, segments) {
   return subtitlePath;
 }
 
+function buildSubtitleCues(segments, clipStart, clipEnd) {
+  return segments.flatMap((segment) => {
+    const start = Math.max(0, Number(segment.start ?? segment.start_time ?? clipStart) - clipStart);
+    const end = Math.min(clipEnd - clipStart, Number(segment.end ?? segment.end_time ?? clipEnd) - clipStart);
+    const words = subtitleWords(segment.text);
+    if (words.length === 0 || end <= start) return [];
+
+    const maxCueCount = Math.max(1, Math.floor((end - start) / MIN_SUBTITLE_SECONDS));
+    const chunks = chunkSubtitleWords(words).slice(0, maxCueCount);
+    const slotSeconds = (end - start) / chunks.length;
+    return chunks.map((chunk, index) => {
+      const cueStart = start + slotSeconds * index;
+      const nextStart = index < chunks.length - 1 ? start + slotSeconds * (index + 1) : end;
+      const cueEnd = Math.min(nextStart, cueStart + Math.max(MIN_SUBTITLE_SECONDS, Math.min(MAX_SUBTITLE_SECONDS, slotSeconds)));
+      return {
+        start: cueStart,
+        end: Math.max(cueStart + 0.25, cueEnd),
+        text: chunk.join(" ")
+      };
+    });
+  });
+}
+
+function subtitleWords(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+function chunkSubtitleWords(words) {
+  const chunks = [];
+  for (let index = 0; index < words.length; index += MAX_SUBTITLE_WORDS) {
+    chunks.push(words.slice(index, index + MAX_SUBTITLE_WORDS));
+  }
+  return chunks;
+}
+
 function buildReadyClipFilters(clip, subtitlePath) {
   const hookText = String(clip.hook || clip.title || "Watch this").trim().slice(0, 120);
   const filters = [
@@ -384,29 +586,10 @@ function buildReadyClipFilters(clip, subtitlePath) {
   ];
 
   if (subtitlePath) {
-    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=16,Alignment=2,MarginV=90,Outline=2,Shadow=1'`);
+    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=13,PrimaryColour=&HFFFFFF,Alignment=2,MarginV=220,Outline=3,Shadow=1'`);
   }
 
   return filters.join(",");
-}
-
-function normalizeSubtitleText(value) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  const words = text.split(" ");
-  const lines = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > 42 && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, 2).join("\n");
 }
 
 function formatSrtTime(seconds) {
@@ -600,14 +783,14 @@ async function analyzeTranscriptSegment(segment) {
       {
         role: "system",
         content:
-          "You are Claipper's stream scan producer. Return only structured JSON. Find 0-3 short-form clip candidates from the transcript segment. Prefer understandable moments with strong first 3 seconds, emotion, opinion, conflict, humor, payoff, and beginner-friendly edits."
+          "You are Claipper's stream scan producer. Return only structured JSON. Find 0-3 short-form clip candidates from the transcript segment. Prefer 20-60 seconds, understandable moments with strong first 3 seconds, emotion, opinion, conflict, humor, payoff, and beginner-friendly edits. Start close to the strong moment, avoid irrelevant intro, and end after a clear sentence/payoff."
       },
       {
         role: "user",
         content: [
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
-          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this could work as a short-form clip\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\"}]}.",
+          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this could work as a short-form clip\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\"}]}. Keep each candidate 20-60 seconds. Avoid irrelevant intro. End after a clear sentence/payoff.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -629,7 +812,7 @@ async function rankCandidatesWithAi(candidates) {
       {
         role: "system",
         content:
-          "Rank Claipper clip candidates. Return only structured JSON. Keep the best 10-20 moments. Prefer clips that work without full context, start strong, have emotion/opinion/conflict/humor/payoff, are not too long, work on TikTok/Reels/Shorts, and are easy for beginner editors."
+          "Rank Claipper clip candidates. Return only structured JSON. Keep the best 10-20 moments. Prefer 20-60 second clips that work without full context, start strong, avoid irrelevant intro, end after a clear sentence/payoff, have emotion/opinion/conflict/humor/payoff, work on TikTok/Reels/Shorts, and are easy for beginner editors."
       },
       {
         role: "user",
@@ -721,7 +904,7 @@ function rankClipCandidates(candidates, limit = 20) {
   return [...candidates]
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
-      return duration >= 10 && duration <= 180;
+      return duration >= READY_CLIP_MIN_SECONDS && duration <= READY_CLIP_MAX_SECONDS;
     })
     .sort((first, second) => second.score - first.score)
     .slice(0, limit);

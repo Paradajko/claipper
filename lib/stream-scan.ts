@@ -141,7 +141,7 @@ export function rankClipCandidates(candidates: NormalizedClipCandidate[], limit 
   return [...candidates]
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
-      return duration >= 10 && duration <= 180;
+      return duration >= 20 && duration <= 60;
     })
     .sort((first, second) => second.score - first.score)
     .slice(0, limit);

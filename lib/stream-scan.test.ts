@@ -72,6 +72,7 @@ describe("stream scan helpers", () => {
 
   it("ranks candidates by score while filtering long or unclear ranges", () => {
     const ranked = rankClipCandidates([
+      { title: "Too short", start_time: 0, end_time: 12, score: 100, reason: "short", hook: "h", caption: "c", difficulty: "easy", clip_type: "story" },
       { title: "Too long", start_time: 0, end_time: 400, score: 99, reason: "long", hook: "h", caption: "c", difficulty: "easy", clip_type: "story" },
       { title: "Best", start_time: 10, end_time: 50, score: 95, reason: "best", hook: "h", caption: "c", difficulty: "easy", clip_type: "reaction" },
       { title: "Weak", start_time: 60, end_time: 80, score: 61, reason: "weak", hook: "h", caption: "c", difficulty: "medium", clip_type: "other" }
