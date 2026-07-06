@@ -11,11 +11,13 @@ export const streamScanFlags = {
   workerProcessing: process.env.ENABLE_WORKER_PROCESSING !== "false"
 } as const;
 
+export const MVP_UPLOAD_LIMIT_MB = 1000;
+
 export const supportedVideoExtensions = ["mp4", "mov", "mkv", "webm"] as const;
 export const supportedVideoMimeTypes = ["video/mp4", "video/quicktime", "video/x-matroska", "video/webm"] as const;
 
 export function maxUploadSizeBytes() {
-  const mb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 5120);
+  const mb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? String(MVP_UPLOAD_LIMIT_MB));
   return Math.max(1, mb) * 1024 * 1024;
 }
 

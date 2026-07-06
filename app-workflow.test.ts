@@ -101,6 +101,22 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("video/mp4");
   });
 
+  it("sets the MVP direct upload limit to 1000 MB and explains bucket-limit failures", () => {
+    const config = read("lib/stream-scan-config.ts");
+    const ingest = read("components/content-lab-ingest.tsx");
+    const bucketMigration = read("supabase/migrations/005_mvp_upload_limit.sql");
+    const envExample = read(".env.example");
+
+    expect(config).toContain("MVP_UPLOAD_LIMIT_MB = 1000");
+    expect(config).toContain("MAX_UPLOAD_SIZE_MB ?? String(MVP_UPLOAD_LIMIT_MB)");
+    expect(ingest).toContain("Current upload limit: {maxSizeMb} MB");
+    expect(ingest).toContain("Supabase Storage is still capped below this file size");
+    expect(bucketMigration).toContain("file_size_limit = 1048576000");
+    expect(bucketMigration).toContain("where id = 'original-videos'");
+    expect(envExample).toContain("MAX_UPLOAD_SIZE_MB=1000");
+    expect(envExample).toContain("NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=1000");
+  });
+
   it("defines MyLaura Brief as a simple campaign-context analyzer", () => {
     const brief = read("app/app/mylaura-brief/page.tsx");
 

@@ -12,7 +12,7 @@ type UploadSession = {
   signedUrl: string;
 };
 
-const maxSizeMb = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 5120);
+const maxSizeMb = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 1000);
 
 export function ContentLabIngest() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -223,11 +223,18 @@ async function uploadWithProgress(session: UploadSession, file: File, onProgress
     const { error } = await supabase.storage
       .from(session.bucket)
       .uploadToSignedUrl(session.storagePath, session.token, file, { contentType: file.type || "application/octet-stream", upsert: true });
-    if (error) throw error;
+    if (error) throw new Error(cleanStorageUploadError(error.message));
     onProgress(92);
   } finally {
     window.clearInterval(stagedTimer);
   }
+}
+
+function cleanStorageUploadError(message: string) {
+  if (/exceeded the maximum allowed size|maximum allowed size|file size limit|payload too large/i.test(message)) {
+    return `Supabase Storage is still capped below this file size. Current app upload limit is ${maxSizeMb} MB; increase the original-videos bucket file size limit and try again.`;
+  }
+  return message || "Upload to Supabase Storage failed.";
 }
 
 function formatBytes(bytes: number) {
