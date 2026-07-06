@@ -107,18 +107,18 @@ export function ContentLabIngest() {
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 rounded-md border border-white/10 bg-white/[0.025] p-1 text-sm">
+      <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-black/25 p-1 text-sm">
         <button
           type="button"
           onClick={() => setActiveTab("upload")}
-          className={activeTab === "upload" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.035]"}
+          className={activeTab === "upload" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 transition hover:bg-white/[0.05]"}
         >
           Upload video
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("link")}
-          className={activeTab === "link" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.035]"}
+          className={activeTab === "link" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 transition hover:bg-white/[0.05]"}
         >
           Import from link
         </button>
@@ -130,14 +130,18 @@ export function ContentLabIngest() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="grid gap-2 rounded-md border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-emerald-400/30 hover:bg-emerald-400/[0.035]"
+            className="content-lab-dropzone grid min-h-32 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-5 text-left transition hover:border-emerald-400/35 hover:bg-emerald-400/[0.045]"
           >
-            <span className="flex items-center gap-2 font-medium text-white">
-              <UploadCloud className="h-4 w-4 text-emerald-300" />
-              {file ? file.name : "Choose video file"}
-            </span>
-            <span className="text-sm text-slate-400">
-              {fileSize ? `${fileSize} selected.` : "MP4, MOV, MKV or WEBM. Large files upload directly to Supabase Storage."}
+            <span className="relative flex items-center gap-3 font-medium text-white">
+              <span className="flex h-10 w-10 items-center justify-center rounded-md border border-emerald-300/20 bg-emerald-300/10 text-emerald-200">
+                <UploadCloud className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate">{file ? file.name : "Choose video file"}</span>
+                <span className="mt-1 block text-sm font-normal text-slate-400">
+                  {fileSize ? `${fileSize} selected.` : "MP4, MOV, MKV or WEBM. Large files upload directly to Supabase Storage."}
+                </span>
+              </span>
             </span>
           </button>
           <input
@@ -163,7 +167,7 @@ export function ContentLabIngest() {
         <div className="grid gap-4">
           <Input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} label="Video title" placeholder="Optional title" />
           <Input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} label="Platform link" placeholder="YouTube, Twitch or Kick URL" />
-          <p className="rounded-md border border-white/10 bg-white/[0.025] p-3 text-sm leading-6 text-slate-400">
+          <p className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-slate-400">
             Platform imports are processed by the worker and may take longer for long videos.
           </p>
           <button

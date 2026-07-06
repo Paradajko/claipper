@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Link2, Radio } from "lucide-react";
+import { ArrowRight, ExternalLink, Radio, Sparkles, UploadCloud } from "lucide-react";
 import { ContentLabIngest } from "@/components/content-lab-ingest";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { getLatestWorkerHeartbeat, getSourceVideos, getStreamVideos, isSupabaseConfigured } from "@/lib/supabase";
@@ -13,70 +13,92 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
 
   return (
     <AppShell title="Content Lab" eyebrow="AI analysis">
-      <div className="space-y-5">
+      <div className="space-y-6">
         <WorkerStatusStrip heartbeat={workerHeartbeat} connected={workerConnected} />
 
-      <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr] xl:gap-6">
-        <Card className="border-white/10 bg-white/[0.035] p-4">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-emerald-300" />
-                <h2 className="text-lg font-semibold text-white">Analyze long-form content</h2>
+        <section className="content-lab-upload-shell dashboard-ambient rounded-lg border border-white/10 bg-slate-950/55 p-4 backdrop-blur-xl md:p-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <Badge className="mb-3 border-cyan-300/25 bg-cyan-300/10 text-cyan-100">Content Lab</Badge>
+                  <h2 className="text-2xl font-semibold tracking-tight text-white">Analyze long-form content</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                    Upload directly to Supabase Storage or queue a YouTube, Kick or Twitch import for the worker.
+                  </p>
+                </div>
+                <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10 text-emerald-200 sm:flex">
+                  <UploadCloud className="h-5 w-5" />
+                </div>
               </div>
-              <p className="text-sm leading-6 text-slate-400">
-                Upload directly to Supabase Storage or queue a platform import for the worker.
-              </p>
+              {query.error ? (
+                <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
+                  {query.error}
+                </p>
+              ) : null}
+              {!isSupabaseConfigured ? (
+                <p className="mb-4 rounded-md border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">
+                  Demo mode: AI analysis will start saving after Supabase and AI environment variables are configured.
+                </p>
+              ) : null}
+              <ContentLabIngest />
             </div>
-          </div>
-          {query.error ? (
-            <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
-              {query.error}
-            </p>
-          ) : null}
-          {!isSupabaseConfigured ? (
-            <p className="mb-4 rounded-md border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">
-              Demo mode: AI analysis will start saving after Supabase and AI environment variables are configured.
-            </p>
-          ) : null}
-          <ContentLabIngest />
-        </Card>
 
-        <div className="space-y-4">
+            <aside className="rounded-lg border border-white/10 bg-black/20 p-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-300" />
+                <h3 className="text-sm font-semibold text-white">What happens next</h3>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {["Upload or import", "Worker transcribes", "AI ranks moments", "Review clip ideas"].map((step, index) => (
+                  <div key={step} className="flex items-center gap-3 rounded-md border border-white/10 bg-white/[0.035] p-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-semibold text-emerald-100">{index + 1}</span>
+                    <span className="text-sm text-slate-300">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-white">Recent analyses</h2>
+              <h2 className="text-xl font-semibold text-white">Recent analyses</h2>
               <p className="mt-1 text-sm text-slate-400">Uploads, imports and completed scans.</p>
             </div>
             <Badge className="w-fit border-white/10 bg-white/5 text-slate-300">{streamVideos.length || sources.length} items</Badge>
           </div>
           {streamVideos.length > 0 ? (
-            streamVideos.map((video) => <StreamVideoCard key={video.id} video={video} workerConnected={workerConnected} />)
+            <div className="grid gap-4 xl:grid-cols-2">
+              {streamVideos.map((video) => <StreamVideoCard key={video.id} video={video} workerConnected={workerConnected} />)}
+            </div>
           ) : sources.length > 0 ? (
-            sources.map((source) => (
-              <Card key={source.id} className="border-white/10 bg-white/[0.035] p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Analyzed</Badge>
-                      {source.mylaura_campaign_name ? <Badge className="border-white/10 bg-white/5 text-slate-200">MyLaura context</Badge> : null}
+            <div className="grid gap-4 xl:grid-cols-2">
+              {sources.map((source) => (
+                <Card key={source.id} className="premium-hover border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Analyzed</Badge>
+                        {source.mylaura_campaign_name ? <Badge className="border-white/10 bg-white/5 text-slate-200">MyLaura context</Badge> : null}
+                      </div>
+                      <h2 className="text-lg font-semibold text-white">{source.title}</h2>
+                      <p className="mt-2 text-sm text-slate-400">{source.notes ?? "Strong moments and clip ideas will appear after analysis."}</p>
                     </div>
-                    <h2 className="text-lg font-semibold text-white">{source.title}</h2>
-                    <p className="mt-2 text-sm text-slate-400">{source.notes ?? "Strong moments and clip ideas will appear after analysis."}</p>
+                    {source.source_url ? (
+                      <a href={source.source_url} target="_blank" className="inline-flex items-center gap-2 text-sm text-emerald-300" rel="noreferrer">
+                        Open content <ExternalLink size={15} />
+                      </a>
+                    ) : null}
                   </div>
-                  {source.source_url ? (
-                    <a href={source.source_url} target="_blank" className="inline-flex items-center gap-2 text-sm text-emerald-300" rel="noreferrer">
-                      Open content <ExternalLink size={15} />
-                    </a>
-                  ) : null}
-                </div>
-              </Card>
-            ))
+                </Card>
+              ))}
+            </div>
           ) : (
             <EmptyNotice>Add a video link or upload long-form content. Claipper will analyze it and turn it into clip ideas.</EmptyNotice>
           )}
-        </div>
-      </div>
+        </section>
       </div>
     </AppShell>
   );
@@ -84,7 +106,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
 
 function WorkerStatusStrip({ heartbeat, connected }: { heartbeat: WorkerHeartbeat | null; connected: boolean }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3">
+    <div className="rounded-lg border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur-xl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
@@ -124,7 +146,7 @@ function StreamVideoCard({ video, workerConnected }: { video: StreamVideo; worke
     }) ?? video.progress_text ?? "Ready for Stream Scan.";
 
   return (
-    <Card className="border-white/10 bg-white/[0.035] p-4">
+    <Card className="premium-hover border-white/10 bg-white/[0.04] p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap gap-2">

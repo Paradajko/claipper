@@ -29,42 +29,50 @@ export default async function DashboardPage() {
 
   return (
     <AppShell title="Dashboard" eyebrow="AI clipping workspace">
-      <div className="flex flex-col gap-5">
-      <section className="order-2 rounded-lg border border-white/10 bg-white/[0.035] p-4 md:order-1 md:p-5">
-        <div>
-          <Badge className="border-cyan-300/20 bg-cyan-300/10 text-cyan-100">Clean workspace</Badge>
-          <h2 className="mt-3 text-xl font-semibold tracking-tight text-white md:text-2xl">Start with context. Finish with clips.</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-            Use a MyLaura brief or analyze any video directly. Claipper turns long-form content into scored clip ideas and production-ready outputs.
-          </p>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            {workflowSteps.map((step, index) => (
-              <div key={step.label} className="relative">
-                {index < workflowSteps.length - 1 ? <div className="absolute left-[calc(100%-0.25rem)] top-1/2 z-0 hidden h-px w-5 bg-white/10 lg:block" /> : null}
-                <div
-                  className={[
-                    "relative z-10 flex min-h-24 flex-col justify-between rounded-md border p-3",
-                    step.active
-                      ? "border-emerald-300/25 bg-emerald-300/[0.08] text-white"
-                      : "border-white/10 bg-black/15 text-slate-300"
-                  ].join(" ")}
-                >
-                  <step.icon className={step.active ? "h-5 w-5 text-emerald-200" : "h-5 w-5 text-emerald-200/80"} />
-                  <p className="mt-3 text-sm font-semibold">{step.label}</p>
-                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-                    <div className={step.active ? "h-full w-3/4 rounded-full bg-emerald-300" : "h-full w-1/3 rounded-full bg-emerald-300/40"} />
-                  </div>
+      <div className="flex flex-col gap-6">
+        <section className="dashboard-ambient order-2 rounded-lg border border-white/10 bg-slate-950/55 p-5 backdrop-blur-xl md:order-1 md:p-6">
+          <div className="grid gap-6 xl:grid-cols-[1fr_360px] xl:items-end">
+            <div>
+              <Badge className="border-cyan-300/25 bg-cyan-300/10 text-cyan-100">AI production workspace</Badge>
+              <h2 className="mt-4 max-w-3xl text-2xl font-semibold tracking-tight text-white md:text-4xl">Start with context. Finish with clips.</h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300 md:text-base">
+                Turn campaign context and long-form video into ranked clip ideas, drafts and ready outputs without switching tools.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-black/20 p-3">
+              {stats.slice(0, 3).map((stat) => (
+                <div key={stat.label} className="rounded-md border border-white/10 bg-white/[0.035] p-3">
+                  <p className="text-xs text-slate-500">{stat.label}</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{stat.value}</p>
                 </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="animated-flow-line relative mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {workflowSteps.map((step) => (
+              <div
+                key={step.label}
+                className={[
+                  "premium-hover relative z-10 flex min-h-24 flex-col justify-between rounded-lg border p-4 backdrop-blur",
+                  step.active
+                    ? "border-emerald-300/35 bg-emerald-300/[0.12] text-white"
+                    : "border-white/10 bg-black/25 text-slate-300"
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <step.icon className={step.active ? "h-5 w-5 text-emerald-200" : "h-5 w-5 text-cyan-200/80"} />
+                  <span className={step.active ? "h-2 w-2 rounded-full bg-emerald-300" : "h-2 w-2 rounded-full bg-white/20"} />
+                </div>
+                <p className="mt-4 text-sm font-semibold">{step.label}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
       <div className="order-1 grid gap-4 md:order-2 xl:grid-cols-2">
         <Link href="/app/mylaura-brief" className="group block">
-          <Card className="h-full border-white/10 bg-white/[0.035] p-0 transition group-hover:border-emerald-400/30 group-hover:bg-emerald-400/[0.04]">
+          <Card className="premium-hover h-full border-white/10 bg-white/[0.045] p-0 group-hover:border-emerald-400/35 group-hover:bg-emerald-400/[0.055]">
             <div className="p-4">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
@@ -101,7 +109,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/app/content-lab" className="group block">
-          <Card className="h-full border-white/10 bg-white/[0.035] p-0 transition group-hover:border-emerald-400/30 group-hover:bg-emerald-400/[0.04]">
+          <Card className="premium-hover h-full border-white/10 bg-white/[0.045] p-0 group-hover:border-cyan-300/35 group-hover:bg-cyan-300/[0.05]">
             <div className="p-4">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
@@ -139,7 +147,7 @@ export default async function DashboardPage() {
 
       <div className="order-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className="border-white/10 bg-white/[0.035] p-4">
+          <Card key={stat.label} className="premium-hover border-white/10 bg-white/[0.035] p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm text-slate-400">{stat.label}</p>
@@ -163,7 +171,7 @@ export default async function DashboardPage() {
         {recentAnalyses.length > 0 ? (
           <div className="grid gap-4 xl:grid-cols-3">
             {recentAnalyses.map((analysis, index) => (
-              <Card key={analysis.id} className="border-white/10 bg-white/[0.035] p-4">
+              <Card key={analysis.id} className="premium-hover border-white/10 bg-white/[0.035] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">{analysis.mylaura_campaign_name ? "MyLaura Brief" : "Universal Content"}</Badge>
                   <span className="text-xs text-slate-500">Run {index + 1}</span>
