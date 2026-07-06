@@ -21,6 +21,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.redirect(new URL(`/app/content-lab/${id}?error=${encodeURIComponent("Video not found.")}`, request.url), { status: 303 });
   }
 
+  const { data: activeJob, error: activeJobError } = await supabase
+    .from("processing_jobs")
+    .select("id")
+    .eq("video_id", id)
+    .eq("job_type", "analyze_video")
+    .in("status", ["queued", "running"])
+    .limit(1)
+    .maybeSingle();
+
+  if (activeJobError) {
+    return NextResponse.redirect(new URL(`/app/content-lab/${id}?error=${encodeURIComponent(activeJobError.message)}`, request.url), { status: 303 });
+  }
+
+  if (activeJob) {
+    revalidatePath(`/app/content-lab/${id}`);
+    revalidatePath("/app/content-lab");
+    return NextResponse.redirect(new URL(`/app/content-lab/${id}`, request.url), { status: 303 });
+  }
+
   const { error: updateError } = await supabase
     .from("videos")
     .update({

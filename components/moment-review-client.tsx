@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
 import { ArrowLeft, Download, Play, RefreshCw, Sparkles } from "lucide-react";
@@ -12,6 +12,12 @@ export type MomentReviewSnapshot = {
   video: StreamVideoDetail;
   workerHeartbeat: WorkerHeartbeat | null;
   clips: Array<{ clip: Clip; previewUrl: string | null }>;
+};
+
+type ExportStatus = {
+  active: boolean;
+  label: string | null;
+  tone?: "default" | "error";
 };
 
 export function MomentReviewClient({
@@ -27,38 +33,96 @@ export function MomentReviewClient({
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [optimisticExportIdeaIds, setOptimisticExportIdeaIds] = useState<Set<string>>(new Set());
+  const [optimisticAnalysis, setOptimisticAnalysis] = useState(false);
   const video = snapshot.video;
   const workerHeartbeat = snapshot.workerHeartbeat;
   const ideas = useMemo(() => [...(video.clip_ideas ?? [])].sort((first, second) => second.score - first.score), [video.clip_ideas]);
-  const latestJob = useMemo(() => latestProcessingJob(video.processing_jobs), [video.processing_jobs]);
-  const processing = isVideoProcessing(video.status, latestJob);
-  const shouldPoll = processing && video.status !== "ready" && video.status !== "failed";
-  const progress = Math.max(0, Math.min(100, latestJob?.progress_percent ?? video.progress_percent ?? statusProgress(video.status)));
+  const analysisJob = useMemo(() => latestJobByType(video.processing_jobs, "analyze_video"), [video.processing_jobs]);
+  const renderJobs = useMemo(() => (video.processing_jobs ?? []).filter((job) => job.job_type === "render_ready_clip"), [video.processing_jobs]);
+  const hasActiveAnalysis = optimisticAnalysis || isActiveJob(analysisJob) || isVideoProcessing(video.status, analysisJob);
+  const hasActiveExport = optimisticExportIdeaIds.size > 0 || renderJobs.some(isActiveJob);
+  const shouldPoll = hasActiveAnalysis || hasActiveExport;
+  const progress = analysisProgress(video, analysisJob);
   const workerConnected = isWorkerConnected(workerHeartbeat);
 
   useEffect(() => {
     setSnapshot(initialSnapshot);
   }, [initialSnapshot]);
 
+  const refreshSnapshot = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/stream-scan/videos/${snapshot.video.id}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Could not refresh analysis status.");
+      setSnapshot(payload as MomentReviewSnapshot);
+      setPollError(null);
+    } catch (caught) {
+      setPollError(caught instanceof Error ? caught.message : "Could not refresh analysis status.");
+    }
+  }, [snapshot.video.id]);
+
   useEffect(() => {
     if (!shouldPoll) return;
-
-    async function refreshSnapshot() {
-      try {
-        const response = await fetch(`/api/stream-scan/videos/${snapshot.video.id}`, { cache: "no-store" });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Could not refresh analysis status.");
-        setSnapshot(payload as MomentReviewSnapshot);
-        setPollError(null);
-      } catch (caught) {
-        setPollError(caught instanceof Error ? caught.message : "Could not refresh analysis status.");
-      }
-    }
 
     const interval = window.setInterval(refreshSnapshot, 2500);
     void refreshSnapshot();
     return () => window.clearInterval(interval);
-  }, [shouldPoll, snapshot.video.id]);
+  }, [refreshSnapshot, shouldPoll]);
+
+  useEffect(() => {
+    if (optimisticAnalysis && analysisJob) setOptimisticAnalysis(false);
+  }, [analysisJob, optimisticAnalysis]);
+
+  useEffect(() => {
+    if (optimisticExportIdeaIds.size === 0) return;
+    setOptimisticExportIdeaIds((current) => {
+      const next = new Set(current);
+      for (const ideaId of current) {
+        if (hasExportRecord(ideaId, renderJobs, snapshot.clips)) next.delete(ideaId);
+      }
+      return next.size === current.size ? current : next;
+    });
+  }, [optimisticExportIdeaIds.size, renderJobs, snapshot.clips]);
+
+  async function handleAnalyzeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (hasActiveAnalysis) return;
+    setOptimisticAnalysis(true);
+    setPollError(null);
+
+    try {
+      const response = await fetch(event.currentTarget.action, { method: "POST" });
+      if (!response.ok) throw new Error("Could not start analysis.");
+      await refreshSnapshot();
+    } catch (caught) {
+      setOptimisticAnalysis(false);
+      setPollError(caught instanceof Error ? caught.message : "Could not start analysis.");
+    }
+  }
+
+  async function handleExportSubmit(event: FormEvent<HTMLFormElement>, idea: ClipIdea) {
+    event.preventDefault();
+    const status = exportStatus(idea, renderJobs, snapshot.clips, optimisticExportIdeaIds);
+    if (status.active) return;
+
+    setOptimisticExportIdeaIds((current) => new Set(current).add(idea.id));
+    setPollError(null);
+
+    try {
+      const form = event.currentTarget;
+      const response = await fetch(form.action, { method: "POST", body: new FormData(form) });
+      if (!response.ok) throw new Error("Could not queue export.");
+      await refreshSnapshot();
+    } catch (caught) {
+      setOptimisticExportIdeaIds((current) => {
+        const next = new Set(current);
+        next.delete(idea.id);
+        return next;
+      });
+      setPollError(caught instanceof Error ? caught.message : "Could not queue export.");
+    }
+  }
 
   return (
     <AppShell title={title} eyebrow="Content Lab">
@@ -86,8 +150,8 @@ export function MomentReviewClient({
         {pollError ? <StateNotice tone="error" title="Live update paused">{pollError}</StateNotice> : null}
 
         <StatusProgressPanel
-          latestJob={latestJob}
-          processing={processing}
+          latestJob={analysisJob}
+          processing={hasActiveAnalysis}
           progress={progress}
           stepLabels={stepLabels}
           video={video}
@@ -106,11 +170,11 @@ export function MomentReviewClient({
 
           {video.status === "failed" ? (
             <StateNotice tone="error" title="Analysis failed">
-              {latestJob?.error_message ?? video.error_message ?? "The analysis failed. Run Analysis Again when the source file is ready."}
+              {analysisJob?.error_message ?? video.error_message ?? "The analysis failed. Run Analysis Again when the source file is ready."}
             </StateNotice>
           ) : null}
 
-          {processing && ideas.length === 0 ? (
+          {hasActiveAnalysis && ideas.length === 0 ? (
             <StateNotice title="Analysis in progress">
               Claipper is finding the best moments. Progress and results update here automatically.
             </StateNotice>
@@ -118,8 +182,16 @@ export function MomentReviewClient({
 
           <div className="grid gap-4">
             {ideas.length > 0 ? (
-              ideas.map((idea, index) => <MomentCard key={idea.id} idea={idea} index={index} />)
-            ) : video.status !== "failed" && !processing ? (
+              ideas.map((idea, index) => (
+                <MomentCard
+                  key={idea.id}
+                  exportStatus={exportStatus(idea, renderJobs, snapshot.clips, optimisticExportIdeaIds)}
+                  idea={idea}
+                  index={index}
+                  onExportSubmit={handleExportSubmit}
+                />
+              ))
+            ) : video.status !== "failed" && !hasActiveAnalysis ? (
               <EmptyNotice>No moments yet. Run Analysis Again to find hooks, timestamps and captions.</EmptyNotice>
             ) : null}
           </div>
@@ -129,10 +201,13 @@ export function MomentReviewClient({
           <Card className="border-white/10 bg-white/[0.035] p-4">
             <h3 className="text-sm font-semibold text-white">Analysis</h3>
             <p className="mt-1 text-xs leading-5 text-slate-500">Use this when you want Claipper to look for moments again.</p>
-            <form action={`/api/stream-scan/videos/${video.id}/process`} method="post" className="mt-4">
-              <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15 sm:w-auto">
+            <form action={`/api/stream-scan/videos/${video.id}/process`} method="post" className="mt-4" onSubmit={handleAnalyzeSubmit}>
+              <button
+                disabled={hasActiveAnalysis}
+                className="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-400/30 hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
                 <RefreshCw className="h-4 w-4" />
-                Run Analysis Again
+                {hasActiveAnalysis ? "Analysis running..." : "Run Analysis Again"}
               </button>
             </form>
           </Card>
@@ -226,7 +301,17 @@ function RenderedClipsCard({ clips }: { clips: Array<{ clip: Clip; previewUrl: s
   );
 }
 
-function MomentCard({ idea, index }: { idea: ClipIdea; index: number }) {
+function MomentCard({
+  exportStatus,
+  idea,
+  index,
+  onExportSubmit
+}: {
+  exportStatus: ExportStatus;
+  idea: ClipIdea;
+  index: number;
+  onExportSubmit: (event: FormEvent<HTMLFormElement>, idea: ClipIdea) => void;
+}) {
   return (
     <Card className="border-white/10 bg-white/[0.035] p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -251,21 +336,23 @@ function MomentCard({ idea, index }: { idea: ClipIdea; index: number }) {
       </div>
 
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
-        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="flex flex-col gap-3 sm:flex-row sm:items-center" onSubmit={(event) => onExportSubmit(event, idea)}>
           <label className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm font-medium text-slate-200">
             <input
               type="checkbox"
               name="addCaptions"
               value="true"
+              disabled={exportStatus.active}
               className="h-4 w-4 rounded border-white/20 bg-black accent-emerald-400"
             />
             Add captions
           </label>
-          <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(16,185,129,.25)] hover:bg-emerald-300 sm:w-auto">
+          <button disabled={exportStatus.active} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(16,185,129,.25)] hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
             <Play className="h-4 w-4" />
-            Export 9:16 Clip
+            {exportStatus.active ? "Exporting..." : "Export 9:16 Clip"}
           </button>
         </form>
+        {exportStatus.label ? <p className={clsx("text-sm", exportStatus.tone === "error" ? "text-rose-200" : "text-slate-400")}>{exportStatus.label}</p> : null}
       </div>
     </Card>
   );
@@ -335,14 +422,68 @@ function WorkerStatusBadge({ connected }: { connected: boolean }) {
   );
 }
 
-function latestProcessingJob(jobs: ProcessingJob[] | undefined) {
-  return [...(jobs ?? [])].sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+function latestJobByType(jobs: ProcessingJob[] | undefined, jobType: string) {
+  return [...(jobs ?? [])]
+    .filter((job) => job.job_type === jobType)
+    .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+}
+
+function isActiveJob(job: ProcessingJob | undefined) {
+  return job?.status === "queued" || job?.status === "running";
+}
+
+function hasExportRecord(ideaId: string, renderJobs: ProcessingJob[], clips: Array<{ clip: Clip; previewUrl: string | null }>) {
+  return renderJobs.some((job) => job.clip_idea_id === ideaId) || clips.some(({ clip }) => clip.clip_idea_id === ideaId);
+}
+
+function exportStatus(idea: ClipIdea, renderJobs: ProcessingJob[], clips: Array<{ clip: Clip; previewUrl: string | null }>, optimisticExportIdeaIds: Set<string>): ExportStatus {
+  const job = [...renderJobs]
+    .filter((candidate) => candidate.clip_idea_id === idea.id)
+    .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+  const clip = [...clips]
+    .map((entry) => entry.clip)
+    .filter((candidate) => candidate.clip_idea_id === idea.id)
+    .sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+
+  if (optimisticExportIdeaIds.has(idea.id)) {
+    return { active: true, label: "queued" };
+  }
+
+  if (isActiveJob(job)) {
+    return { active: true, label: formatExportStep(job.current_step ?? job.step ?? job.status) };
+  }
+
+  if (clip?.render_status === "queued" || clip?.render_status === "running") {
+    return { active: true, label: formatExportStep(clip.render_status) };
+  }
+
+  if (job?.status === "failed" || clip?.render_status === "failed") {
+    return { active: false, label: job?.error_message ?? "Export failed. Try again.", tone: "error" };
+  }
+
+  if (clip?.render_status === "completed" || job?.status === "completed") {
+    return { active: false, label: "completed" };
+  }
+
+  return { active: false, label: null };
+}
+
+function formatExportStep(value: string | null | undefined) {
+  const normalized = String(value ?? "queued").replaceAll("_", " ");
+  if (normalized.includes("upload")) return "uploading";
+  if (normalized.includes("render")) return "rendering";
+  return normalized;
 }
 
 function isVideoProcessing(status: StreamVideo["status"], job?: ProcessingJob) {
   if (status === "ready" || status === "failed") return false;
   if (job?.status === "queued" || job?.status === "running") return true;
   return ["uploading", "import_queued", "downloading", "queued", "extracting_audio", "transcribing", "segmenting", "analyzing", "ranking"].includes(status);
+}
+
+function analysisProgress(video: StreamVideo, job?: ProcessingJob) {
+  if (video.status === "ready" || video.status === "failed" || job?.status === "completed") return 100;
+  return Math.max(0, Math.min(100, job?.progress_percent ?? video.progress_percent ?? statusProgress(video.status)));
 }
 
 function activeStepIndex(status: StreamVideo["status"]) {
