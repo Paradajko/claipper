@@ -107,18 +107,18 @@ export function ContentLabIngest() {
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-black/30 p-1 text-sm">
+      <div className="grid grid-cols-2 rounded-md border border-white/10 bg-white/[0.025] p-1 text-sm">
         <button
           type="button"
           onClick={() => setActiveTab("upload")}
-          className={activeTab === "upload" ? "rounded-md bg-emerald-400 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300"}
+          className={activeTab === "upload" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.035]"}
         >
           Upload video
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("link")}
-          className={activeTab === "link" ? "rounded-md bg-emerald-400 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300"}
+          className={activeTab === "link" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 hover:bg-white/[0.035]"}
         >
           Import from link
         </button>
@@ -130,7 +130,7 @@ export function ContentLabIngest() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="grid gap-3 rounded-lg border border-dashed border-white/15 bg-white/[0.03] p-5 text-left transition hover:border-emerald-400/40 hover:bg-emerald-400/[0.04]"
+            className="grid gap-2 rounded-md border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-emerald-400/30 hover:bg-emerald-400/[0.035]"
           >
             <span className="flex items-center gap-2 font-medium text-white">
               <UploadCloud className="h-4 w-4 text-emerald-300" />
@@ -147,13 +147,13 @@ export function ContentLabIngest() {
             className="hidden"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
-          <p className="text-xs text-slate-500">Current upload limit: {maxSizeMb} MB. Supported formats: MP4, MOV, MKV, WEBM.</p>
+          <p className="text-xs text-slate-500">Current upload limit: {maxSizeMb} MB · MP4, MOV, MKV, WEBM</p>
           <ProgressBar progress={progress} />
           <button
             type="button"
             disabled={busy}
             onClick={uploadVideo}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Upload and queue scan
@@ -163,14 +163,14 @@ export function ContentLabIngest() {
         <div className="grid gap-4">
           <Input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} label="Video title" placeholder="Optional title" />
           <Input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} label="Platform link" placeholder="YouTube, Twitch or Kick URL" />
-          <p className="rounded-md border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-400">
+          <p className="rounded-md border border-white/10 bg-white/[0.025] p-3 text-sm leading-6 text-slate-400">
             Platform imports are processed by the worker and may take longer for long videos.
           </p>
           <button
             type="button"
             disabled={busy}
             onClick={importLink}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
             Import with worker
@@ -188,7 +188,7 @@ function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
   return (
     <label className="grid gap-1 text-sm text-slate-300">
       {label}
-      <input {...props} className="h-12 w-full rounded-md border border-white/10 bg-black/30 px-3 text-white outline-none focus:border-emerald-400/60" />
+      <input {...props} className="h-11 w-full rounded-md border border-white/10 bg-black/20 px-3 text-white outline-none focus:border-emerald-400/60" />
     </label>
   );
 }
@@ -196,8 +196,8 @@ function Input({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
 function ProgressBar({ progress }: { progress: number }) {
   return (
     <div className="grid gap-2">
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,.55)] transition-all duration-300" style={{ width: `${progress}%` }} />
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
       </div>
       <p className="text-xs text-slate-500">{progress > 0 ? `${progress}% uploaded / queued` : "Upload progress will appear here."}</p>
     </div>

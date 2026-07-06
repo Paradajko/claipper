@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Link2 } from "lucide-react";
+import { ArrowRight, ExternalLink, Link2, Radio } from "lucide-react";
 import { ContentLabIngest } from "@/components/content-lab-ingest";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { getLatestWorkerHeartbeat, getSourceVideos, getStreamVideos, isSupabaseConfigured } from "@/lib/supabase";
@@ -13,18 +13,22 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
 
   return (
     <AppShell title="Content Lab" eyebrow="AI analysis">
-      <div className="mb-5">
-        <WorkerStatusCard heartbeat={workerHeartbeat} connected={workerConnected} />
-      </div>
-      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr] xl:gap-6">
-        <Card>
-          <div className="mb-5 flex items-center gap-2">
-            <Link2 className="text-emerald-300" />
-            <h2 className="text-lg font-semibold text-white">Analyze long-form content</h2>
+      <div className="space-y-5">
+        <WorkerStatusStrip heartbeat={workerHeartbeat} connected={workerConnected} />
+
+      <div className="grid gap-5 xl:grid-cols-[0.72fr_1.28fr] xl:gap-6">
+        <Card className="border-white/10 bg-white/[0.035] p-4">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-emerald-300" />
+                <h2 className="text-lg font-semibold text-white">Analyze long-form content</h2>
+              </div>
+              <p className="text-sm leading-6 text-slate-400">
+                Upload directly to Supabase Storage or queue a platform import for the worker.
+              </p>
+            </div>
           </div>
-          <p className="mb-5 text-sm leading-6 text-slate-300">
-            Upload long-form content directly to Supabase Storage or queue a YouTube, Kick or Twitch import for the processing worker.
-          </p>
           {query.error ? (
             <p className="mb-4 rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">
               {query.error}
@@ -39,18 +43,25 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
         </Card>
 
         <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Recent analyses</h2>
+              <p className="mt-1 text-sm text-slate-400">Uploads, imports and completed scans.</p>
+            </div>
+            <Badge className="w-fit border-white/10 bg-white/5 text-slate-300">{streamVideos.length || sources.length} items</Badge>
+          </div>
           {streamVideos.length > 0 ? (
             streamVideos.map((video) => <StreamVideoCard key={video.id} video={video} workerConnected={workerConnected} />)
           ) : sources.length > 0 ? (
             sources.map((source) => (
-              <Card key={source.id}>
+              <Card key={source.id} className="border-white/10 bg-white/[0.035] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-2">
                       <Badge className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">Analyzed</Badge>
                       {source.mylaura_campaign_name ? <Badge className="border-white/10 bg-white/5 text-slate-200">MyLaura context</Badge> : null}
                     </div>
-                    <h2 className="text-xl font-semibold text-white">{source.title}</h2>
+                    <h2 className="text-lg font-semibold text-white">{source.title}</h2>
                     <p className="mt-2 text-sm text-slate-400">{source.notes ?? "Strong moments and clip ideas will appear after analysis."}</p>
                   </div>
                   {source.source_url ? (
@@ -66,32 +77,38 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
           )}
         </div>
       </div>
+      </div>
     </AppShell>
   );
 }
 
-function WorkerStatusCard({ heartbeat, connected }: { heartbeat: WorkerHeartbeat | null; connected: boolean }) {
+function WorkerStatusStrip({ heartbeat, connected }: { heartbeat: WorkerHeartbeat | null; connected: boolean }) {
   return (
-    <Card>
+    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-emerald-300/15 bg-emerald-300/10 text-emerald-300">
+            <Radio className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-white">Processing worker</h2>
+            <p className="mt-0.5 truncate text-xs text-slate-500">
+              {connected
+                ? heartbeat?.current_job_id
+                  ? `Current job: ${formatStep(heartbeat.current_step)}`
+                  : "Online and polling for queued jobs."
+                : "Offline. Uploaded videos wait in queue."}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
             <Badge className={connected ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-amber-300/30 bg-amber-300/10 text-amber-100"}>
               {connected ? "Worker connected" : "Worker not connected"}
             </Badge>
             <Badge className="border-white/10 bg-white/5 text-slate-200">Last seen {formatWorkerLastSeen(heartbeat)}</Badge>
-          </div>
-          <h2 className="text-lg font-semibold text-white">Processing worker</h2>
-          <p className="mt-1 text-sm text-slate-400">
-            {connected
-              ? heartbeat?.current_job_id
-                ? `Current job: ${heartbeat.current_job_id} · ${formatStep(heartbeat.current_step)}`
-                : "Worker is online and polling for queued jobs."
-              : "Processing worker is not connected. Uploaded videos will wait in queue."}
-          </p>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -107,21 +124,21 @@ function StreamVideoCard({ video, workerConnected }: { video: StreamVideo; worke
     }) ?? video.progress_text ?? "Ready for Stream Scan.";
 
   return (
-    <Card>
+    <Card className="border-white/10 bg-white/[0.035] p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="mb-3 flex flex-wrap gap-2">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap gap-2">
             <VideoStateBadge state={video.status} />
             {latestJob ? <Badge className="border-white/10 bg-white/5 text-slate-200">Job {latestJob.status}</Badge> : null}
             <Badge className="border-white/10 bg-white/5 text-slate-200">{formatSourceType(video.source_type)}</Badge>
-            {video.original_filename ? <Badge className="border-white/10 bg-white/5 text-slate-200">{video.original_filename}</Badge> : null}
           </div>
-          <h2 className="text-xl font-semibold text-white">{video.title}</h2>
+          <h2 className="truncate text-lg font-semibold text-white">{video.title}</h2>
+          {video.original_filename ? <p className="mt-1 truncate text-xs text-slate-500">{video.original_filename}</p> : null}
           <p className="mt-2 text-sm text-slate-400">{stateText}</p>
           {latestJob?.current_step ? <p className="mt-1 text-xs text-slate-500">Current step: {formatStep(latestJob.current_step)}</p> : null}
-          <div className="mt-4 h-2 max-w-md overflow-hidden rounded-full bg-white/10">
+          <div className="mt-3 h-1.5 max-w-md overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,.45)]"
+              className="h-full rounded-full bg-emerald-400"
               style={{ width: `${progress}%` }}
             />
           </div>

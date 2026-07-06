@@ -73,6 +73,24 @@ describe("AI-first app workflow naming", () => {
     }
   });
 
+  it("keeps Dashboard and Content Lab visually light and scannable", () => {
+    const dashboard = read("app/app/page.tsx");
+    const contentLab = read("app/app/content-lab/page.tsx");
+    const ingest = read("components/content-lab-ingest.tsx");
+
+    expect(dashboard).toContain("Clean workspace");
+    expect(dashboard).toContain("min-h-24");
+    expect(dashboard).toContain("Recent analyses");
+    expect(dashboard).toContain("border-white/10 bg-white/[0.035]");
+    expect(dashboard).not.toContain("shadow-[0_24px_90px_-40px");
+    expect(dashboard).not.toContain("radial-gradient");
+    expect(contentLab).toContain("WorkerStatusStrip");
+    expect(contentLab).toContain("Recent analyses");
+    expect(contentLab).toContain("xl:grid-cols-[0.72fr_1.28fr]");
+    expect(ingest).toContain("rounded-md border border-white/10 bg-white/[0.025]");
+    expect(ingest).not.toContain("border-dashed border-white/15 bg-white/[0.03] p-5");
+  });
+
   it("lets users generate a ready vertical clip next to the draft action", () => {
     const detailPage = read("app/app/content-lab/[id]/page.tsx");
     const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
