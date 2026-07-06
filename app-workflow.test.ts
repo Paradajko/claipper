@@ -86,12 +86,16 @@ describe("AI-first app workflow naming", () => {
     expect(readyRoute).toContain("storageBuckets.clips");
   });
 
-  it("has the Railway worker render ready clips as 9:16 MP4s with hook and subtitle support", () => {
+  it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {
     const worker = read("workers/stream-scan-worker.mjs");
 
     expect(worker).toContain('job.job_type === "render_ready_clip"');
     expect(worker).toContain("processRenderReadyClip");
-    expect(worker).toContain("1080:1920");
+    expect(worker).toContain("720:1280");
+    expect(worker).not.toContain("1080:1920");
+    expect(worker).toContain("\"-hide_banner\"");
+    expect(worker).toContain("\"-loglevel\"");
+    expect(worker).toContain("\"error\"");
     expect(worker).toContain("drawtext");
     expect(worker).toContain("between(t,0,3)");
     expect(worker).toContain("subtitles=");

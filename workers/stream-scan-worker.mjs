@@ -255,6 +255,9 @@ async function processRenderClip(job, { ready }) {
     const videoFilters = buildReadyClipFilters(clip, subtitlePath);
 
     await execFileAsync(ffmpegBinary, [
+      "-hide_banner",
+      "-loglevel",
+      "error",
       "-y",
       "-ss",
       String(clip.start_seconds ?? 0),
@@ -267,7 +270,7 @@ async function processRenderClip(job, { ready }) {
       "-c:v",
       "libx264",
       "-preset",
-      "veryfast",
+      "ultrafast",
       "-crf",
       "23",
       "-c:a",
@@ -375,13 +378,13 @@ async function buildSubtitleFile(workDir, clip, segments) {
 function buildReadyClipFilters(clip, subtitlePath) {
   const hookText = String(clip.hook || clip.title || "Watch this").trim().slice(0, 120);
   const filters = [
-    "scale=1080:1920:force_original_aspect_ratio=increase",
-    "crop=1080:1920",
-    `drawtext=text='${escapeDrawtextValue(hookText)}':fontcolor=white:fontsize=56:box=1:boxcolor=black@0.58:boxborderw=24:x=(w-text_w)/2:y=h*0.12:enable='between(t,0,3)'`
+    "scale=720:1280:force_original_aspect_ratio=increase",
+    "crop=720:1280",
+    `drawtext=text='${escapeDrawtextValue(hookText)}':fontcolor=white:fontsize=42:box=1:boxcolor=black@0.58:boxborderw=18:x=(w-text_w)/2:y=h*0.12:enable='between(t,0,3)'`
   ];
 
   if (subtitlePath) {
-    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=18,Alignment=2,MarginV=130,Outline=2,Shadow=1'`);
+    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=16,Alignment=2,MarginV=90,Outline=2,Shadow=1'`);
   }
 
   return filters.join(",");
