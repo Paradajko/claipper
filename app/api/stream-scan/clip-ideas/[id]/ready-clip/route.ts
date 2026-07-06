@@ -6,6 +6,8 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const formData = await request.formData();
+  const addCaptions = formData.get("addCaptions") === "true";
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase is required for ready clip generation." }, { status: 503 });
@@ -38,7 +40,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       render_status: "queued",
       type: "ready",
       storage_bucket: storageBuckets.clips,
-      raw_data: { created_from: "clip_idea", render_requested_at: new Date().toISOString(), target_aspect_ratio: "9:16" }
+      raw_data: {
+        created_from: "clip_idea",
+        render_requested_at: new Date().toISOString(),
+        target_aspect_ratio: "9:16",
+        add_captions: addCaptions,
+        add_hook_overlay: false
+      }
     })
     .select("id")
     .single();
@@ -55,7 +63,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     status: "queued",
     progress_percent: 0,
     current_step: "queued",
-    step: "queued"
+    step: "queued",
+    raw_data: { add_captions: addCaptions, add_hook_overlay: false }
   });
 
   if (jobError) {

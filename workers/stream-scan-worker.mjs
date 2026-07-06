@@ -256,10 +256,10 @@ async function processRenderClip(job, { ready }) {
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
-    const segments = await loadSubtitleSegments(video.id, Number(renderClip.start_seconds ?? 0), Number(renderClip.end_seconds ?? 0));
+    const shouldAddCaptions = clip.raw_data?.add_captions === true || renderClip.raw_data?.add_captions === true || job.raw_data?.add_captions === true;
+    const segments = shouldAddCaptions ? await loadSubtitleSegments(video.id, Number(renderClip.start_seconds ?? 0), Number(renderClip.end_seconds ?? 0)) : [];
     const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, renderClip, segments) : null;
-    const hookTextPath = await buildHookTextFile(workDir, renderClip);
-    const videoFilters = buildReadyClipFilters(hookTextPath, subtitlePath);
+    const videoFilters = buildReadyClipFilters({ subtitlePath });
 
     await execFileAsync(ffmpegBinary, [
       "-hide_banner",
@@ -578,18 +578,10 @@ function chunkSubtitleWords(words) {
   return chunks;
 }
 
-async function buildHookTextFile(workDir, clip) {
-  const hookText = String(clip.hook || clip.title || "Watch this").trim().slice(0, 120);
-  const hookTextPath = path.join(workDir, `${clip.id}-hook.txt`);
-  await writeFile(hookTextPath, hookText, "utf8");
-  return hookTextPath;
-}
-
-function buildReadyClipFilters(hookTextPath, subtitlePath) {
+function buildReadyClipFilters({ subtitlePath }) {
   const filters = [
     "scale=720:1280:force_original_aspect_ratio=increase",
-    "crop=720:1280",
-    `drawtext=textfile='${escapeFilterQuotedValue(hookTextPath)}':fontcolor=white:fontsize=42:box=1:boxcolor=black@0.58:boxborderw=18:x=(w-text_w)/2:y=h*0.12:enable='between(t\\,0\\,3)'`
+    "crop=720:1280"
   ];
 
   if (subtitlePath) {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ArrowLeft, Download, Play, RefreshCw, Sparkles, WandSparkles } from "lucide-react";
+import { ArrowLeft, Download, Play, RefreshCw, Sparkles } from "lucide-react";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { formatStep, formatWorkerLastSeen, isWorkerConnected } from "@/lib/worker-health";
 import type { Clip, ClipIdea, ProcessingJob, StreamVideo, StreamVideoDetail, WorkerHeartbeat } from "@/lib/types";
@@ -251,16 +251,19 @@ function MomentCard({ idea, index }: { idea: ClipIdea; index: number }) {
       </div>
 
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
-        <form action={`/api/stream-scan/clip-ideas/${idea.id}/draft`} method="post" className="sm:w-auto">
+        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm font-medium text-slate-200">
+            <input
+              type="checkbox"
+              name="addCaptions"
+              value="true"
+              className="h-4 w-4 rounded border-white/20 bg-black accent-emerald-400"
+            />
+            Add captions
+          </label>
           <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(16,185,129,.25)] hover:bg-emerald-300 sm:w-auto">
             <Play className="h-4 w-4" />
             Export 9:16 Clip
-          </button>
-        </form>
-        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="sm:w-auto">
-          <button className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-300/40 hover:bg-emerald-400/10 sm:w-auto">
-            <WandSparkles className="h-3.5 w-3.5 text-emerald-200" />
-            Render Ready MP4
           </button>
         </form>
       </div>
@@ -274,7 +277,7 @@ function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">{clip.title ?? (clip.type === "ready" ? "Ready clip" : "Draft clip")}</p>
-          <p className="mt-1 text-xs text-slate-500">{formatRange(clip.start_seconds, clip.end_seconds)} · {clip.render_status ?? clip.status}</p>
+          <p className="mt-1 text-xs text-slate-500">{formatRange(clip.start_seconds, clip.end_seconds)} · {formatCaptionMode(clip)} · {clip.render_status ?? clip.status}</p>
         </div>
         {previewUrl || clip.exported_video_url ? (
           <a href={previewUrl ?? clip.exported_video_url ?? "#"} className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">
@@ -285,6 +288,10 @@ function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | 
       </div>
     </div>
   );
+}
+
+function formatCaptionMode(clip: Clip) {
+  return clip.raw_data?.add_captions === true ? "Captions" : "Clean";
 }
 
 function StateNotice({ children, title, tone = "default" }: { children: React.ReactNode; title: string; tone?: "default" | "error" }) {

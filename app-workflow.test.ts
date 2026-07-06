@@ -100,20 +100,30 @@ describe("AI-first app workflow naming", () => {
     }
   });
 
-  it("lets users export a vertical clip and keep ready render as secondary", () => {
+  it("lets users export one clear vertical clip with optional captions", () => {
     const detailPage = read("app/app/content-lab/[id]/page.tsx");
     const reviewClient = read("components/moment-review-client.tsx");
     const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
+    const worker = read("workers/stream-scan-worker.mjs");
 
     expect(reviewClient).toContain("Export 9:16 Clip");
+    expect(reviewClient).toContain("Add captions");
     expect(reviewClient).toContain("/ready-clip");
-    expect(reviewClient).toContain("Render Ready MP4");
+    expect(reviewClient).toContain('name="addCaptions"');
+    expect(reviewClient).toContain("formatCaptionMode");
     expect(reviewClient).toContain("Download");
-    expect(reviewClient.indexOf("Export 9:16 Clip")).toBeLessThan(reviewClient.indexOf("Render Ready MP4"));
+    expect(reviewClient).not.toContain("Render Ready MP4");
+    expect(reviewClient).not.toContain("/draft");
     expect(detailPage).not.toContain("Generate Draft");
+    expect(readyRoute).toContain("await request.formData()");
+    expect(readyRoute).toContain("add_captions: addCaptions");
+    expect(readyRoute).toContain("add_hook_overlay: false");
     expect(readyRoute).toContain('job_type: "render_ready_clip"');
     expect(readyRoute).toContain('type: "ready"');
     expect(readyRoute).toContain("storageBuckets.clips");
+    expect(worker).toContain("shouldAddCaptions");
+    expect(worker).toContain("clip.raw_data?.add_captions === true");
+    expect(worker).toContain("buildReadyClipFilters({ subtitlePath })");
   });
 
   it("presents the video detail page as a clean Moment Review workspace with live updates", () => {
@@ -170,11 +180,11 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("\"-hide_banner\"");
     expect(worker).toContain("\"-loglevel\"");
     expect(worker).toContain("\"error\"");
-    expect(worker).toContain("drawtext");
-    expect(worker).toContain("buildHookTextFile");
-    expect(worker).toContain("textfile='");
+    expect(worker).toContain("add_captions");
+    expect(worker).not.toContain("buildHookTextFile");
+    expect(worker).not.toContain("textfile='");
     expect(worker).not.toContain("drawtext=text=");
-    expect(worker).toContain("between(t\\\\,0\\\\,3)");
+    expect(worker).not.toContain("between(t\\\\,0\\\\,3)");
     expect(worker).toContain("subtitles=");
     expect(worker).toContain("loadSubtitleSegments");
     expect(worker).toContain("loadFineTranscriptSegments");
