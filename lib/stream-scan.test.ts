@@ -56,7 +56,16 @@ describe("stream scan helpers", () => {
       hook: "This is where the argument changes.",
       caption: "A short moment worth replaying.",
       difficulty: "easy",
-      clip_type: "opinion"
+      clip_type: "opinion",
+      attention_score: 92,
+      emotion_spike: 80,
+      hook_strength: 95,
+      payoff_score: 88,
+      context_needed: 12,
+      retention_risk: 18,
+      edit_difficulty: 22,
+      recommendation: "export",
+      recut_suggestion: "Start at the sentence with the challenge and end after the laugh."
     });
 
     expect(candidate).toMatchObject({
@@ -65,19 +74,57 @@ describe("stream scan helpers", () => {
       end_time: 529,
       score: 91,
       difficulty: "easy",
-      clip_type: "opinion"
+      clip_type: "opinion",
+      attention_score: 92,
+      emotion_spike: 80,
+      hook_strength: 95,
+      payoff_score: 88,
+      context_needed: 12,
+      retention_risk: 18,
+      edit_difficulty: 22,
+      recommendation: "export",
+      recut_suggestion: "Start at the sentence with the challenge and end after the laugh."
     });
     expect(normalizeClipCandidate({ title: "bad", start_time: "oops" })).toBeNull();
   });
 
+  it("keeps legacy clip idea candidates working with v2 scoring defaults", () => {
+    const candidate = normalizeClipCandidate({
+      title: "Legacy opener",
+      start_time: "00:01:10",
+      end_time: "00:01:44",
+      score: 82,
+      reason: "Clear reaction.",
+      hook: "Wait for the turn.",
+      caption: "This changed fast.",
+      difficulty: "medium",
+      clip_type: "reaction"
+    });
+
+    expect(candidate).toMatchObject({
+      title: "Legacy opener",
+      attention_score: 82,
+      emotion_spike: 50,
+      hook_strength: 82,
+      payoff_score: 50,
+      context_needed: 50,
+      retention_risk: 50,
+      edit_difficulty: 50,
+      recommendation: "maybe",
+      recut_suggestion: ""
+    });
+  });
+
   it("ranks candidates by score while filtering long or unclear ranges", () => {
     const ranked = rankClipCandidates([
-      { title: "Too short", start_time: 0, end_time: 12, score: 100, reason: "short", hook: "h", caption: "c", difficulty: "easy", clip_type: "story" },
-      { title: "Too long", start_time: 0, end_time: 400, score: 99, reason: "long", hook: "h", caption: "c", difficulty: "easy", clip_type: "story" },
-      { title: "Best", start_time: 10, end_time: 50, score: 95, reason: "best", hook: "h", caption: "c", difficulty: "easy", clip_type: "reaction" },
-      { title: "Weak", start_time: 60, end_time: 80, score: 61, reason: "weak", hook: "h", caption: "c", difficulty: "medium", clip_type: "other" }
+      { title: "Too short", start_time: 0, end_time: 12, score: 100, reason: "short", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 100, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "" },
+      { title: "Too long", start_time: 0, end_time: 400, score: 99, reason: "long", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 99, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "" },
+      { title: "Summary", start_time: 1, end_time: 40, score: 98, reason: "calm explanation", hook: "h", caption: "c", difficulty: "easy", clip_type: "educational", attention_score: 25, emotion_spike: 10, hook_strength: 20, payoff_score: 15, context_needed: 85, retention_risk: 90, edit_difficulty: 30, recommendation: "skip", recut_suggestion: "Needs a sharper reaction." },
+      { title: "Needs recut", start_time: 60, end_time: 100, score: 96, reason: "great payoff but starts early", hook: "h", caption: "c", difficulty: "medium", clip_type: "opinion", attention_score: 88, emotion_spike: 80, hook_strength: 84, payoff_score: 90, context_needed: 28, retention_risk: 42, edit_difficulty: 64, recommendation: "needs_recut", recut_suggestion: "Trim the setup." },
+      { title: "Best", start_time: 10, end_time: 50, score: 95, reason: "best", hook: "h", caption: "c", difficulty: "easy", clip_type: "reaction", attention_score: 95, emotion_spike: 88, hook_strength: 92, payoff_score: 86, context_needed: 18, retention_risk: 20, edit_difficulty: 22, recommendation: "export", recut_suggestion: "" },
+      { title: "Weak", start_time: 110, end_time: 140, score: 61, reason: "weak", hook: "h", caption: "c", difficulty: "medium", clip_type: "other", attention_score: 55, emotion_spike: 40, hook_strength: 52, payoff_score: 45, context_needed: 60, retention_risk: 62, edit_difficulty: 50, recommendation: "maybe", recut_suggestion: "" }
     ]);
 
-    expect(ranked.map((item) => item.title)).toEqual(["Best", "Weak"]);
+    expect(ranked.map((item) => item.title)).toEqual(["Best", "Needs recut", "Weak"]);
   });
 });

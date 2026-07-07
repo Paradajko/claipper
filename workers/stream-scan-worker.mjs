@@ -32,6 +32,9 @@ const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
+const CLIP_DIFFICULTIES = ["easy", "medium", "hard"];
+const CLIP_TYPES = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"];
+const CLIP_RECOMMENDATIONS = ["export", "needs_recut", "maybe", "skip"];
 const MAX_SUBTITLE_WORDS = 3;
 const MIN_SUBTITLE_SECONDS = 0.6;
 const MAX_SUBTITLE_SECONDS = 1.6;
@@ -729,14 +732,7 @@ async function saveTranscriptSegments(videoId, transcriptId, segments) {
 async function saveClipIdeas(videoId, ideas) {
   await supabase.from("clip_ideas").delete().eq("video_id", videoId);
   if (ideas.length === 0) return;
-  const { error } = await supabase.from("clip_ideas").insert(
-    ideas.map((idea) => ({
-      video_id: videoId,
-      ...idea,
-      status: "idea",
-      raw_data: { source: "stream_scan_worker" }
-    }))
-  );
+  const { error } = await supabase.from("clip_ideas").insert(ideas.map((idea) => clipIdeaInsertPayload(videoId, idea, "stream_scan_worker")));
   if (error) throw new Error(error.message);
 }
 
@@ -772,14 +768,15 @@ async function analyzeTranscriptSegment(segment) {
       {
         role: "system",
         content:
-          "You are Claipper's stream scan producer. Return only structured JSON. Find 0-3 short-form clip candidates from the transcript segment. Prefer 20-60 seconds, understandable moments with strong first 3 seconds, emotion, opinion, conflict, humor, payoff, and beginner-friendly edits. Start close to the strong moment, avoid irrelevant intro, and end after a clear sentence/payoff."
+          "You are Claipper's Moment Finder v2 producer. Return only structured JSON. Find 0-2 scroll-stopping short-form moments, not summaries. Prefer 20-60 seconds with emotional spikes, reactions, conflict, hot takes, surprising statements, funny moments and clear payoff. Penalize calm educational explanations, intros, outros, thank-you sections and moments that need too much context. For Slovak/Czech transcripts, preserve meaning and judge hooks, emotion and payoff in that language."
       },
       {
         role: "user",
         content: [
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
-          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this could work as a short-form clip\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\"}]}. Keep each candidate 20-60 seconds. Avoid irrelevant intro. End after a clear sentence/payoff.",
+          "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
+          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"specific trim/edit note or empty string\"}]}. Keep each candidate 20-60 seconds. Return fewer candidates if only generic material is present.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -792,7 +789,7 @@ async function analyzeTranscriptSegment(segment) {
 }
 
 async function rankCandidatesWithAi(candidates) {
-  const locallyRanked = rankClipCandidates(candidates, 20);
+  const locallyRanked = rankClipCandidates(candidates, 12);
   if (locallyRanked.length <= 1 || !openai) return locallyRanked;
   const completion = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
@@ -801,7 +798,7 @@ async function rankCandidatesWithAi(candidates) {
       {
         role: "system",
         content:
-          "Rank Claipper clip candidates. Return only structured JSON. Keep the best 10-20 moments. Prefer 20-60 second clips that work without full context, start strong, avoid irrelevant intro, end after a clear sentence/payoff, have emotion/opinion/conflict/humor/payoff, work on TikTok/Reels/Shorts, and are easy for beginner editors."
+          "Rank Claipper Moment Finder v2 candidates. Return only structured JSON. Keep only the strongest 5-12 moments. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic summaries, calm educational sections, intros, outros and thank-you sections. Keep Slovak/Czech nuance when judging hot takes, reactions and humor."
       },
       {
         role: "user",
@@ -812,7 +809,7 @@ async function rankCandidatesWithAi(candidates) {
     max_tokens: 3000
   });
   const aiRanked = parseCandidatesJson(completion.choices[0]?.message.content ?? "");
-  return aiRanked.length > 0 ? rankClipCandidates(aiRanked, 20) : locallyRanked;
+  return aiRanked.length > 0 ? rankClipCandidates(aiRanked, 12) : locallyRanked;
 }
 
 function toTranscriptItems(transcript) {
@@ -871,21 +868,31 @@ function parseCandidatesJson(content) {
 }
 
 function normalizeClipCandidate(value) {
-  const difficulty = ["easy", "medium", "hard"].includes(value?.difficulty) ? value.difficulty : null;
-  const clipType = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"].includes(value?.clip_type) ? value.clip_type : null;
+  const difficulty = CLIP_DIFFICULTIES.includes(value?.difficulty) ? value.difficulty : null;
+  const clipType = CLIP_TYPES.includes(value?.clip_type) ? value.clip_type : null;
   const start = parseTimestampToSeconds(String(value?.start_time ?? ""));
   const end = parseTimestampToSeconds(String(value?.end_time ?? ""));
   if (!difficulty || !clipType || end <= start) return null;
+  const score = normalizeScore(value.score, 0);
   return {
     title: String(value.title ?? "").slice(0, 180) || "Untitled clip idea",
     start_time: start,
     end_time: end,
-    score: Math.max(0, Math.min(100, Math.round(Number(value.score ?? 0)))),
+    score,
     reason: String(value.reason ?? ""),
     hook: String(value.hook ?? ""),
     caption: String(value.caption ?? ""),
     difficulty,
-    clip_type: clipType
+    clip_type: clipType,
+    attention_score: normalizeScore(value.attention_score, score),
+    emotion_spike: normalizeScore(value.emotion_spike, 50),
+    hook_strength: normalizeScore(value.hook_strength, score),
+    payoff_score: normalizeScore(value.payoff_score, 50),
+    context_needed: normalizeScore(value.context_needed, 50),
+    retention_risk: normalizeScore(value.retention_risk, 50),
+    edit_difficulty: normalizeScore(value.edit_difficulty, 50),
+    recommendation: CLIP_RECOMMENDATIONS.includes(value?.recommendation) ? value.recommendation : "maybe",
+    recut_suggestion: String(value.recut_suggestion ?? "").trim()
   };
 }
 
@@ -893,10 +900,57 @@ function rankClipCandidates(candidates, limit = 20) {
   return [...candidates]
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
-      return duration >= READY_CLIP_MIN_SECONDS && duration <= READY_CLIP_MAX_SECONDS;
+      return duration >= READY_CLIP_MIN_SECONDS && duration <= READY_CLIP_MAX_SECONDS && candidate.recommendation !== "skip";
     })
-    .sort((first, second) => second.score - first.score)
+    .sort((first, second) => v2MomentScore(second) - v2MomentScore(first))
     .slice(0, limit);
+}
+
+function clipIdeaInsertPayload(videoId, idea, source) {
+  return {
+    video_id: videoId,
+    title: idea.title,
+    start_time: idea.start_time,
+    end_time: idea.end_time,
+    score: idea.score,
+    reason: idea.reason,
+    hook: idea.hook,
+    caption: idea.caption,
+    difficulty: idea.difficulty,
+    clip_type: idea.clip_type,
+    status: "idea",
+    raw_data: {
+      source,
+      moment_finder_version: "v2",
+      moment_v2: {
+        attention_score: idea.attention_score,
+        emotion_spike: idea.emotion_spike,
+        hook_strength: idea.hook_strength,
+        payoff_score: idea.payoff_score,
+        context_needed: idea.context_needed,
+        retention_risk: idea.retention_risk,
+        edit_difficulty: idea.edit_difficulty,
+        recommendation: idea.recommendation,
+        recut_suggestion: idea.recut_suggestion
+      }
+    }
+  };
+}
+
+function normalizeScore(value, fallback) {
+  return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
+}
+
+function v2MomentScore(candidate) {
+  const signal =
+    candidate.attention_score * 0.26 +
+    candidate.emotion_spike * 0.18 +
+    candidate.hook_strength * 0.2 +
+    candidate.payoff_score * 0.18 +
+    candidate.score * 0.12;
+  const penalty = candidate.context_needed * 0.14 + candidate.retention_risk * 0.18 + candidate.edit_difficulty * 0.06;
+  const recommendationBoost = candidate.recommendation === "export" ? 8 : candidate.recommendation === "needs_recut" ? -3 : 0;
+  return signal - penalty + recommendationBoost;
 }
 
 function parseTimestampToSeconds(timestamp) {

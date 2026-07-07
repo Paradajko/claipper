@@ -20,6 +20,8 @@ type ExportStatus = {
   tone?: "default" | "error";
 };
 
+type MomentRecommendation = "export" | "needs_recut" | "maybe" | "skip";
+
 export function MomentReviewClient({
   error,
   initialSnapshot,
@@ -330,6 +332,7 @@ function MomentCard({
       </div>
 
       <div className="mt-5 grid gap-3">
+        <MomentV2ScoreStrip idea={idea} />
         <LabeledText label="Why it works">{idea.reason}</LabeledText>
         <LabeledText label="Hook">{idea.hook}</LabeledText>
         <LabeledText label="Caption">{idea.caption}</LabeledText>
@@ -358,6 +361,36 @@ function MomentCard({
   );
 }
 
+function MomentV2ScoreStrip({ idea }: { idea: ClipIdea }) {
+  const scores = momentV2Scores(idea);
+
+  return (
+    <div className="rounded-md border border-white/10 bg-black/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge className={recommendationClass(scores.recommendation)}>{formatRecommendation(scores.recommendation)}</Badge>
+        <CompactScore label="Attention" value={scores.attention_score} />
+        <CompactScore label="Emotion" value={scores.emotion_spike} />
+        <CompactScore label="Hook" value={scores.hook_strength} />
+        <CompactScore label="Payoff" value={scores.payoff_score} />
+        <CompactScore label="Context" value={scores.context_needed} inverse />
+        <CompactScore label="Risk" value={scores.retention_risk} inverse />
+        <CompactScore label="Edit" value={scores.edit_difficulty} inverse />
+      </div>
+      {scores.recut_suggestion ? <p className="mt-2 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
+    </div>
+  );
+}
+
+function CompactScore({ inverse = false, label, value }: { inverse?: boolean; label: string; value: number }) {
+  const tone = inverse ? 100 - value : value;
+  return (
+    <span className={clsx("inline-flex min-h-7 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium", tone >= 75 ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100" : tone >= 50 ? "border-amber-300/25 bg-amber-300/10 text-amber-100" : "border-rose-300/25 bg-rose-300/10 text-rose-100")}>
+      <span className="text-slate-400">{label}</span>
+      <span className="font-mono">{value}</span>
+    </span>
+  );
+}
+
 function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | null }) {
   return (
     <div className="rounded-md border border-white/10 bg-black/20 p-3">
@@ -379,6 +412,47 @@ function DraftClipCard({ clip, previewUrl }: { clip: Clip; previewUrl: string | 
 
 function formatCaptionMode(clip: Clip) {
   return clip.raw_data?.add_captions === true ? "Captions" : "Clean";
+}
+
+function momentV2Scores(idea: ClipIdea) {
+  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
+  return {
+    attention_score: scoreFromRaw(rawScores.attention_score, idea.score),
+    emotion_spike: scoreFromRaw(rawScores.emotion_spike, 50),
+    hook_strength: scoreFromRaw(rawScores.hook_strength, idea.score),
+    payoff_score: scoreFromRaw(rawScores.payoff_score, 50),
+    context_needed: scoreFromRaw(rawScores.context_needed, 50),
+    retention_risk: scoreFromRaw(rawScores.retention_risk, 50),
+    edit_difficulty: scoreFromRaw(rawScores.edit_difficulty, 50),
+    recommendation: recommendationFromRaw(rawScores.recommendation),
+    recut_suggestion: typeof rawScores.recut_suggestion === "string" ? rawScores.recut_suggestion.trim() : ""
+  };
+}
+
+function scoreFromRaw(value: unknown, fallback: number) {
+  return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
+}
+
+function recommendationFromRaw(value: unknown): MomentRecommendation {
+  return value === "export" || value === "needs_recut" || value === "maybe" || value === "skip" ? value : "maybe";
+}
+
+function formatRecommendation(value: MomentRecommendation) {
+  if (value === "export") return "Export";
+  if (value === "needs_recut") return "Needs recut";
+  if (value === "skip") return "Skip";
+  return "Maybe";
+}
+
+function recommendationClass(value: MomentRecommendation) {
+  if (value === "export") return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
+  if (value === "needs_recut") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  if (value === "skip") return "border-rose-300/25 bg-rose-300/10 text-rose-100";
+  return "border-white/10 bg-white/5 text-slate-200";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function StateNotice({ children, title, tone = "default" }: { children: React.ReactNode; title: string; tone?: "default" | "error" }) {

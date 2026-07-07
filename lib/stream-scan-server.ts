@@ -7,6 +7,7 @@ import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildTranscriptSegments,
+  clipIdeaInsertPayload,
   normalizeClipCandidates,
   rankClipCandidates,
   secondsToTimestamp,
@@ -263,14 +264,15 @@ async function analyzeTranscriptSegment(segment: { segment_index: number; start_
       {
         role: "system",
         content:
-          "You are Claipper's stream scan producer. Return only structured JSON. Find 0-3 short-form clip candidates from the transcript segment. Prefer understandable moments with strong first 3 seconds, emotion, opinion, conflict, humor, payoff, and beginner-friendly edits."
+          "You are Claipper's Moment Finder v2 producer. Return only structured JSON. Find 0-2 scroll-stopping short-form moments, not summaries. Prefer emotional spikes, reactions, conflict, hot takes, surprising statements, funny moments and clear payoff. Penalize calm educational explanations, intros, outros, thank-you sections and moments that need too much context. For Slovak/Czech transcripts, preserve meaning and judge hooks, emotion and payoff in that language."
       },
       {
         role: "user",
         content: [
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
-          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this could work as a short-form clip\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\"}]}.",
+          "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
+          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"specific trim/edit note or empty string\"}]}. Return fewer candidates if only generic material is present.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -284,8 +286,8 @@ async function analyzeTranscriptSegment(segment: { segment_index: number; start_
 }
 
 async function rankCandidatesWithAi(candidates: NormalizedClipCandidate[]) {
-  const locallyRanked = rankClipCandidates(candidates, 20);
-  if (locallyRanked.length <= 1 || !process.env.OPENAI_API_KEY) return locallyRanked.slice(0, 20);
+  const locallyRanked = rankClipCandidates(candidates, 12);
+  if (locallyRanked.length <= 1 || !process.env.OPENAI_API_KEY) return locallyRanked.slice(0, 12);
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const completion = await client.chat.completions.create({
@@ -295,7 +297,7 @@ async function rankCandidatesWithAi(candidates: NormalizedClipCandidate[]) {
       {
         role: "system",
         content:
-          "Rank Claipper clip candidates. Return only structured JSON. Keep the best 10-20 moments. Prefer clips that work without full context, start strong, have emotion/opinion/conflict/humor/payoff, are not too long, work on TikTok/Reels/Shorts, and are easy for beginner editors."
+          "Rank Claipper Moment Finder v2 candidates. Return only structured JSON. Keep only the strongest 5-12 moments. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic summaries, calm educational sections, intros, outros and thank-you sections. Keep Slovak/Czech nuance when judging hot takes, reactions and humor."
       },
       {
         role: "user",
@@ -307,7 +309,7 @@ async function rankCandidatesWithAi(candidates: NormalizedClipCandidate[]) {
   });
 
   const aiRanked = parseCandidatesJson(completion.choices[0]?.message.content ?? "");
-  return aiRanked.length > 0 ? rankClipCandidates(aiRanked, 20) : locallyRanked;
+  return aiRanked.length > 0 ? rankClipCandidates(aiRanked, 12) : locallyRanked;
 }
 
 function parseCandidatesJson(content: string) {
@@ -379,14 +381,7 @@ async function saveClipIdeas(supabase: SupabaseClient, videoId: string, ideas: N
   await supabase.from("clip_ideas").delete().eq("video_id", videoId);
   if (ideas.length === 0) return;
 
-  const { error } = await supabase.from("clip_ideas").insert(
-    ideas.map((idea) => ({
-      video_id: videoId,
-      ...idea,
-      status: "idea",
-      raw_data: { source: "stream_scan_mvp" }
-    }))
-  );
+  const { error } = await supabase.from("clip_ideas").insert(ideas.map((idea) => clipIdeaInsertPayload(videoId, idea, "stream_scan_mvp")));
   if (error) throw new Error(error.message);
 }
 
