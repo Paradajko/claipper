@@ -11,6 +11,7 @@ import {
   groundClipCandidate,
   normalizeClipCandidates,
   rankClipCandidates,
+  refineFinalMomentTiming,
   secondsToTimestamp,
   type NormalizedClipCandidate,
   type TranscriptItem,
@@ -134,11 +135,12 @@ export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: s
     await updateJob(supabase, jobId, "running", "ranking");
     const ranked = await rankCandidatesWithAi(candidates);
     const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
-    await saveClipIdeas(supabase, videoId, grounded);
+    const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
+    await saveClipIdeas(supabase, videoId, refined);
 
-    await setVideoStatus(supabase, videoId, "ready", `Ready with ${grounded.length} ranked clip ideas.`);
+    await setVideoStatus(supabase, videoId, "ready", `Ready with ${refined.length} ranked clip ideas.`);
     await updateJob(supabase, jobId, "completed", "ready");
-    return { ideas: grounded.length };
+    return { ideas: refined.length };
   } catch (pipelineError) {
     const message = pipelineError instanceof Error ? pipelineError.message : "Unknown stream scan failure.";
     await setVideoStatus(supabase, videoId, "failed", "Processing failed.", message);

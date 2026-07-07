@@ -7,6 +7,7 @@ import {
   normalizeClipCandidate,
   parseTimestampToSeconds,
   rankClipCandidates,
+  refineFinalMomentTiming,
   secondsToTimestamp
 } from "@/lib/stream-scan";
 
@@ -275,5 +276,45 @@ describe("stream scan helpers", () => {
     expect(grounded.source_quote).toContain("manažéroch");
     expect(grounded.title).not.toContain("Ferrari");
     expect(grounded.recommendation).toBe("maybe");
+  });
+
+  it("trims grounded final moments to the first strong sentence and a natural payoff", () => {
+    const candidate = normalizeClipCandidate({
+      title: "Klient zahodil zmluvu",
+      start_time: "00:00:00",
+      end_time: "00:00:50",
+      score: 91,
+      reason: "Silny konflikt s jasnou reakciou.",
+      hook: "Klient povedal, ze zmluvu jednoducho zahodi.",
+      caption: "Ked klient zahodi zmluvu, miestnost stichne.",
+      difficulty: "easy",
+      clip_type: "story",
+      attention_score: 92,
+      emotion_spike: 86,
+      hook_strength: 91,
+      payoff_score: 88,
+      context_needed: 18,
+      retention_risk: 20,
+      edit_difficulty: 24,
+      recommendation: "export",
+      recut_suggestion: ""
+    })!;
+    const transcript = [
+      { start: 0, end: 6, text: "Ahojte, vitajte, dnes sa budeme rozpravat o zakulisi projektu." },
+      { start: 7, end: 14, text: "Najprv len rychly kontext o nasom time a procese." },
+      { start: 15, end: 23, text: "Potom mi klient povedal, ze zmluvu jednoducho zahodi." },
+      { start: 24, end: 34, text: "A ja som mu povedal, ze takto sa biznis nerobi." },
+      { start: 35, end: 42, text: "Vtedy nastalo uplne ticho a vsetci sa zacali smiat." },
+      { start: 43, end: 50, text: "Takze dakujem za pozornost a odoberajte kanal." }
+    ];
+
+    const refined = refineFinalMomentTiming(candidate, transcript);
+
+    expect(refined.start_time).toBe(15);
+    expect(refined.end_time).toBe(42);
+    expect(refined.source_quote).toBe(
+      "Potom mi klient povedal, ze zmluvu jednoducho zahodi. A ja som mu povedal, ze takto sa biznis nerobi. Vtedy nastalo uplne ticho a vsetci sa zacali smiat."
+    );
+    expect(refined.title).toBe("Klient zahodil zmluvu");
   });
 });

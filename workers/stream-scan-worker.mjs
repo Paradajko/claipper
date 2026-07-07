@@ -226,17 +226,18 @@ async function processAnalyzeVideo(job) {
   await updateVideo(video.id, "ranking", 90, "Ranking the strongest moments.");
   const ranked = await rankCandidatesWithAi(candidates);
   const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
-  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${grounded.length}`);
-  for (const [index, moment] of grounded.entries()) {
+  const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
+  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${refined.length}`);
+  for (const [index, moment] of refined.entries()) {
     const overlappingPreview = extractSourceQuote(transcriptItems, moment.start_time, moment.end_time).slice(0, 260);
     console.log(
       `[claipper-worker] final moment ${index + 1}: title="${moment.title}" start_time=${secondsToTimestamp(moment.start_time)} end_time=${secondsToTimestamp(moment.end_time)} source_quote="${moment.source_quote}" overlapping transcript preview="${overlappingPreview}"`
     );
   }
   await updateJob(job.id, "running", "saving_clip_ideas", 95);
-  await saveClipIdeas(video.id, grounded);
+  await saveClipIdeas(video.id, refined);
 
-  await updateVideo(video.id, "ready", 100, `Ready with ${grounded.length} ranked clip ideas.`);
+  await updateVideo(video.id, "ready", 100, `Ready with ${refined.length} ranked clip ideas.`);
   await updateJob(job.id, "completed", "ready", 100);
 }
 
@@ -989,6 +990,57 @@ function groundClipCandidate(candidate, items) {
   };
 }
 
+function refineFinalMomentTiming(candidate, items) {
+  if (candidate.recommendation === "skip") return candidate;
+
+  const selectedItems = items.filter((item) => item.end > candidate.start_time && item.start < candidate.end_time);
+  if (selectedItems.length === 0) {
+    return { ...candidate, source_quote: extractSourceQuote(items, candidate.start_time, candidate.end_time) || candidate.source_quote };
+  }
+
+  const metadataTokenSet = new Set(contentTokens([candidate.title, candidate.hook, candidate.caption].join(" ")));
+  const minimumDuration = isVeryStrongMoment(candidate) ? 12 : READY_CLIP_MIN_SECONDS;
+  let startIndex = findFirstStrongItemIndex(selectedItems, metadataTokenSet);
+  let endIndex = selectedItems.length - 1;
+
+  while (
+    endIndex > startIndex &&
+    isBoringTrailingText(selectedItems[endIndex].text) &&
+    selectedItems[endIndex - 1].end - selectedItems[startIndex].start >= minimumDuration
+  ) {
+    endIndex -= 1;
+  }
+
+  if (selectedItems[endIndex].end - selectedItems[startIndex].start < minimumDuration) {
+    for (let index = startIndex - 1; index >= 0; index -= 1) {
+      startIndex = index;
+      if (selectedItems[endIndex].end - selectedItems[startIndex].start >= minimumDuration) break;
+    }
+  }
+
+  if (selectedItems[endIndex].end - selectedItems[startIndex].start > 45) {
+    endIndex = findNaturalEndIndex(selectedItems, startIndex, endIndex, minimumDuration, 45);
+  }
+
+  const start = selectedItems[startIndex].start;
+  const end = selectedItems[endIndex].end;
+  const sourceQuote = extractSourceQuote(items, start, end) || candidate.source_quote;
+  const refined = { ...candidate, start_time: start, end_time: end, source_quote: sourceQuote };
+
+  if (metadataMatchesQuote(refined, sourceQuote)) return refined;
+
+  const groundedText = sourceQuote.slice(0, 180);
+  return {
+    ...refined,
+    title: titleFromQuote(sourceQuote),
+    reason: "Final trim was grounded to the selected transcript text.",
+    hook: groundedText,
+    caption: groundedText,
+    recommendation: candidate.recommendation === "export" ? "maybe" : candidate.recommendation,
+    recut_suggestion: sourceQuote ? "Metadata was rewritten to match the final trimmed timestamp." : candidate.recut_suggestion
+  };
+}
+
 function metadataMatchesQuote(candidate, quote) {
   const metadataTokens = contentTokens([candidate.title, candidate.hook, candidate.caption].join(" "));
   if (metadataTokens.length === 0) return Boolean(String(quote ?? "").trim());
@@ -1016,6 +1068,67 @@ function findBestQuoteRange(candidate, items) {
     end = items[index].end;
   }
   return { start, end };
+}
+
+function findFirstStrongItemIndex(items, metadataTokens) {
+  let firstNonBoring = 0;
+  for (const [index, item] of items.entries()) {
+    if (index === firstNonBoring && isBoringLeadText(item.text)) firstNonBoring = index + 1;
+    if (isBoringLeadText(item.text)) continue;
+
+    const itemTokens = contentTokens(item.text);
+    const metadataMatches = itemTokens.filter((token) => metadataTokens.has(token)).length;
+    if (metadataMatches >= Math.min(2, metadataTokens.size || 2)) return index;
+    if (itemStrengthScore(item.text) >= 2) return index;
+  }
+  return Math.min(firstNonBoring, items.length - 1);
+}
+
+function findNaturalEndIndex(items, startIndex, currentEndIndex, minimumDuration, targetMaxDuration) {
+  const start = items[startIndex].start;
+  let fallback = currentEndIndex;
+  let bestPayoff = -1;
+
+  for (let index = startIndex; index <= currentEndIndex; index += 1) {
+    const duration = items[index].end - start;
+    if (duration < minimumDuration) continue;
+    if (duration > targetMaxDuration) break;
+    fallback = index;
+    if (itemStrengthScore(items[index].text) >= 2 || endsCompleteThought(items[index].text)) bestPayoff = index;
+  }
+
+  if (bestPayoff >= startIndex) return bestPayoff;
+  return fallback;
+}
+
+function isVeryStrongMoment(candidate) {
+  return candidate.score >= 90 || (candidate.attention_score >= 90 && candidate.hook_strength >= 85 && candidate.payoff_score >= 80);
+}
+
+function itemStrengthScore(text) {
+  const normalized = normalizeText(text);
+  let score = /[!?]/.test(text) ? 1 : 0;
+  if (hasAnyPhrase(normalized, strongPhrases)) score += 2;
+  if (endsCompleteThought(text)) score += 1;
+  return score;
+}
+
+function isBoringLeadText(text) {
+  const normalized = normalizeText(text);
+  return hasAnyPhrase(normalized, boringLeadPhrases);
+}
+
+function isBoringTrailingText(text) {
+  const normalized = normalizeText(text);
+  return hasAnyPhrase(normalized, boringTrailingPhrases);
+}
+
+function endsCompleteThought(text) {
+  return /[.!?]["')\]]?\s*$/.test(String(text ?? "").trim());
+}
+
+function hasAnyPhrase(value, phrases) {
+  return phrases.some((phrase) => value.includes(phrase));
 }
 
 function titleFromQuote(quote) {
@@ -1063,6 +1176,65 @@ const stopWords = new Set([
   "when",
   "then"
 ]);
+
+const boringLeadPhrases = [
+  "ahoj",
+  "ahojte",
+  "vitajte",
+  "dobry den",
+  "dnes sa budeme",
+  "dnes si povieme",
+  "v tomto videu",
+  "na zaciatok",
+  "najprv len",
+  "najskor len",
+  "rychly kontext",
+  "este predtym",
+  "podme sa",
+  "welcome",
+  "thanks for joining",
+  "today we are",
+  "in this video",
+  "before we start",
+  "first a quick context",
+  "quick context"
+];
+
+const boringTrailingPhrases = [
+  "dakujem",
+  "vdaka za pozornost",
+  "odoberajte",
+  "subscribe",
+  "like",
+  "komentar",
+  "to je vsetko",
+  "see you",
+  "thanks for watching",
+  "thank you"
+];
+
+const strongPhrases = [
+  "povedal",
+  "povedala",
+  "nikdy",
+  "problem",
+  "konflikt",
+  "ticho",
+  "smial",
+  "smiali",
+  "smiech",
+  "absurd",
+  "pravda",
+  "reakcia",
+  "never",
+  "problem",
+  "conflict",
+  "silence",
+  "laughed",
+  "laughing",
+  "truth",
+  "reaction"
+];
 
 function normalizeScore(value, fallback) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));

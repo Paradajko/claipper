@@ -253,6 +253,57 @@ export function groundClipCandidate(candidate: NormalizedClipCandidate, items: T
   };
 }
 
+export function refineFinalMomentTiming(candidate: NormalizedClipCandidate, items: TranscriptItem[]): NormalizedClipCandidate {
+  if (candidate.recommendation === "skip") return candidate;
+
+  const selectedItems = items.filter((item) => item.end > candidate.start_time && item.start < candidate.end_time);
+  if (selectedItems.length === 0) {
+    return { ...candidate, source_quote: extractSourceQuote(items, candidate.start_time, candidate.end_time) || candidate.source_quote };
+  }
+
+  const metadataTokenSet = new Set(contentTokens([candidate.title, candidate.hook, candidate.caption].join(" ")));
+  const minimumDuration = isVeryStrongMoment(candidate) ? 12 : 20;
+  let startIndex = findFirstStrongItemIndex(selectedItems, metadataTokenSet);
+  let endIndex = selectedItems.length - 1;
+
+  while (
+    endIndex > startIndex &&
+    isBoringTrailingText(selectedItems[endIndex].text) &&
+    selectedItems[endIndex - 1].end - selectedItems[startIndex].start >= minimumDuration
+  ) {
+    endIndex -= 1;
+  }
+
+  if (selectedItems[endIndex].end - selectedItems[startIndex].start < minimumDuration) {
+    for (let index = startIndex - 1; index >= 0; index -= 1) {
+      startIndex = index;
+      if (selectedItems[endIndex].end - selectedItems[startIndex].start >= minimumDuration) break;
+    }
+  }
+
+  if (selectedItems[endIndex].end - selectedItems[startIndex].start > 45) {
+    endIndex = findNaturalEndIndex(selectedItems, startIndex, endIndex, minimumDuration, 45);
+  }
+
+  const start = selectedItems[startIndex].start;
+  const end = selectedItems[endIndex].end;
+  const sourceQuote = extractSourceQuote(items, start, end) || candidate.source_quote;
+  const refined = { ...candidate, start_time: start, end_time: end, source_quote: sourceQuote };
+
+  if (metadataMatchesQuote(refined, sourceQuote)) return refined;
+
+  const groundedText = sourceQuote.slice(0, 180);
+  return {
+    ...refined,
+    title: titleFromQuote(sourceQuote),
+    reason: "Final trim was grounded to the selected transcript text.",
+    hook: groundedText,
+    caption: groundedText,
+    recommendation: candidate.recommendation === "export" ? "maybe" : candidate.recommendation,
+    recut_suggestion: sourceQuote ? "Metadata was rewritten to match the final trimmed timestamp." : candidate.recut_suggestion
+  };
+}
+
 function metadataMatchesQuote(candidate: NormalizedClipCandidate, quote: string) {
   const metadataTokens = contentTokens([candidate.title, candidate.hook, candidate.caption].join(" "));
   if (metadataTokens.length === 0) return Boolean(quote.trim());
@@ -281,6 +332,67 @@ function findBestQuoteRange(candidate: NormalizedClipCandidate, items: Transcrip
     end = items[index].end;
   }
   return { start, end };
+}
+
+function findFirstStrongItemIndex(items: TranscriptItem[], metadataTokens: Set<string>) {
+  let firstNonBoring = 0;
+  for (const [index, item] of items.entries()) {
+    if (index === firstNonBoring && isBoringLeadText(item.text)) firstNonBoring = index + 1;
+    if (isBoringLeadText(item.text)) continue;
+
+    const itemTokens = contentTokens(item.text);
+    const metadataMatches = itemTokens.filter((token) => metadataTokens.has(token)).length;
+    if (metadataMatches >= Math.min(2, metadataTokens.size || 2)) return index;
+    if (itemStrengthScore(item.text) >= 2) return index;
+  }
+  return Math.min(firstNonBoring, items.length - 1);
+}
+
+function findNaturalEndIndex(items: TranscriptItem[], startIndex: number, currentEndIndex: number, minimumDuration: number, targetMaxDuration: number) {
+  const start = items[startIndex].start;
+  let fallback = currentEndIndex;
+  let bestPayoff = -1;
+
+  for (let index = startIndex; index <= currentEndIndex; index += 1) {
+    const duration = items[index].end - start;
+    if (duration < minimumDuration) continue;
+    if (duration > targetMaxDuration) break;
+    fallback = index;
+    if (itemStrengthScore(items[index].text) >= 2 || endsCompleteThought(items[index].text)) bestPayoff = index;
+  }
+
+  if (bestPayoff >= startIndex) return bestPayoff;
+  return fallback;
+}
+
+function isVeryStrongMoment(candidate: NormalizedClipCandidate) {
+  return candidate.score >= 90 || (candidate.attention_score >= 90 && candidate.hook_strength >= 85 && candidate.payoff_score >= 80);
+}
+
+function itemStrengthScore(text: string) {
+  const normalized = normalizeText(text);
+  let score = /[!?]/.test(text) ? 1 : 0;
+  if (hasAnyPhrase(normalized, strongPhrases)) score += 2;
+  if (endsCompleteThought(text)) score += 1;
+  return score;
+}
+
+function isBoringLeadText(text: string) {
+  const normalized = normalizeText(text);
+  return hasAnyPhrase(normalized, boringLeadPhrases);
+}
+
+function isBoringTrailingText(text: string) {
+  const normalized = normalizeText(text);
+  return hasAnyPhrase(normalized, boringTrailingPhrases);
+}
+
+function endsCompleteThought(text: string) {
+  return /[.!?]["')\]]?\s*$/.test(text.trim());
+}
+
+function hasAnyPhrase(value: string, phrases: string[]) {
+  return phrases.some((phrase) => value.includes(phrase));
 }
 
 function titleFromQuote(quote: string) {
@@ -328,6 +440,65 @@ const stopWords = new Set([
   "when",
   "then"
 ]);
+
+const boringLeadPhrases = [
+  "ahoj",
+  "ahojte",
+  "vitajte",
+  "dobry den",
+  "dnes sa budeme",
+  "dnes si povieme",
+  "v tomto videu",
+  "na zaciatok",
+  "najprv len",
+  "najskor len",
+  "rychly kontext",
+  "este predtym",
+  "podme sa",
+  "welcome",
+  "thanks for joining",
+  "today we are",
+  "in this video",
+  "before we start",
+  "first a quick context",
+  "quick context"
+];
+
+const boringTrailingPhrases = [
+  "dakujem",
+  "vdaka za pozornost",
+  "odoberajte",
+  "subscribe",
+  "like",
+  "komentar",
+  "to je vsetko",
+  "see you",
+  "thanks for watching",
+  "thank you"
+];
+
+const strongPhrases = [
+  "povedal",
+  "povedala",
+  "nikdy",
+  "problem",
+  "konflikt",
+  "ticho",
+  "smial",
+  "smiali",
+  "smiech",
+  "absurd",
+  "pravda",
+  "reakcia",
+  "never",
+  "problem",
+  "conflict",
+  "silence",
+  "laughed",
+  "laughing",
+  "truth",
+  "reaction"
+];
 
 function normalizeScore(value: number | undefined, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
