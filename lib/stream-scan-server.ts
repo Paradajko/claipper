@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildTranscriptSegments,
   clipIdeaInsertPayload,
+  groundClipCandidate,
   normalizeClipCandidates,
   rankClipCandidates,
   secondsToTimestamp,
@@ -118,7 +119,8 @@ export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: s
 
     await setVideoStatus(supabase, videoId, "segmenting", "Splitting transcript into reviewable chunks.");
     await updateJob(supabase, jobId, "running", "segmenting");
-    const segments = buildTranscriptSegments(toTranscriptItems(transcript), 600);
+    const transcriptItems = toTranscriptItems(transcript);
+    const segments = buildTranscriptSegments(transcriptItems, 600);
     await saveTranscriptSegments(supabase, videoId, transcriptId, segments);
 
     await setVideoStatus(supabase, videoId, "analyzing", "Analyzing transcript chunks for clip candidates.");
@@ -131,11 +133,12 @@ export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: s
     await setVideoStatus(supabase, videoId, "ranking", "Ranking the strongest moments.");
     await updateJob(supabase, jobId, "running", "ranking");
     const ranked = await rankCandidatesWithAi(candidates);
-    await saveClipIdeas(supabase, videoId, ranked);
+    const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
+    await saveClipIdeas(supabase, videoId, grounded);
 
-    await setVideoStatus(supabase, videoId, "ready", `Ready with ${ranked.length} ranked clip ideas.`);
+    await setVideoStatus(supabase, videoId, "ready", `Ready with ${grounded.length} ranked clip ideas.`);
     await updateJob(supabase, jobId, "completed", "ready");
-    return { ideas: ranked.length };
+    return { ideas: grounded.length };
   } catch (pipelineError) {
     const message = pipelineError instanceof Error ? pipelineError.message : "Unknown stream scan failure.";
     await setVideoStatus(supabase, videoId, "failed", "Processing failed.", message);

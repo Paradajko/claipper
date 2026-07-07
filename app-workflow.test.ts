@@ -168,6 +168,8 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).toContain("moment_finder_version");
     expect(reviewClient).toContain("retention_risk");
     expect(reviewClient).toContain("recut_suggestion");
+    expect(reviewClient).toContain("source_quote");
+    expect(reviewClient).toContain("Source quote:");
     expect(reviewClient).toContain("formatMomentVersion");
     expect(reviewClient).toContain("recommendationClass");
     expect(reviewClient).toContain("idea, index");
@@ -197,6 +199,8 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("local candidates found");
     expect(worker).toContain("final ranked candidates");
     expect(worker).toContain("moment_finder_version");
+    expect(worker).toContain("source_quote");
+    expect(worker).toContain("overlapping transcript preview");
   });
 
   it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {

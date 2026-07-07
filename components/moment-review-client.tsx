@@ -341,6 +341,7 @@ function MomentCard({
         <LabeledText label="Hook">{idea.hook}</LabeledText>
         <LabeledText label="Caption">{idea.caption}</LabeledText>
         {scores.recut_suggestion ? <p className="-mt-1 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
+        {scores.source_quote ? <p className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-slate-400">Source quote: {scores.source_quote}</p> : null}
       </div>
 
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
@@ -429,7 +430,8 @@ function momentV2Scores(idea: ClipIdea) {
     retention_risk: scoreFromRaw(rawScores.retention_risk, 50),
     edit_difficulty: scoreFromRaw(rawScores.edit_difficulty, 50),
     recommendation: recommendationFromRaw(rawScores.recommendation),
-    recut_suggestion: typeof rawScores.recut_suggestion === "string" ? rawScores.recut_suggestion.trim() : ""
+    recut_suggestion: typeof rawScores.recut_suggestion === "string" ? rawScores.recut_suggestion.trim() : "",
+    source_quote: typeof rawScores.source_quote === "string" ? rawScores.source_quote.trim() : ""
   };
 }
 

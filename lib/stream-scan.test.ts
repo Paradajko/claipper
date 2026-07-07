@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildTranscriptSegments,
   clipIdeaInsertPayload,
+  extractSourceQuote,
+  groundClipCandidate,
   normalizeClipCandidate,
   parseTimestampToSeconds,
   rankClipCandidates,
@@ -118,12 +120,12 @@ describe("stream scan helpers", () => {
 
   it("ranks candidates by score while filtering long or unclear ranges", () => {
     const ranked = rankClipCandidates([
-      { title: "Too short", start_time: 0, end_time: 12, score: 100, reason: "short", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 100, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "" },
-      { title: "Too long", start_time: 0, end_time: 400, score: 99, reason: "long", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 99, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "" },
-      { title: "Summary", start_time: 1, end_time: 40, score: 98, reason: "calm explanation", hook: "h", caption: "c", difficulty: "easy", clip_type: "educational", attention_score: 25, emotion_spike: 10, hook_strength: 20, payoff_score: 15, context_needed: 85, retention_risk: 90, edit_difficulty: 30, recommendation: "skip", recut_suggestion: "Needs a sharper reaction." },
-      { title: "Needs recut", start_time: 60, end_time: 100, score: 96, reason: "great payoff but starts early", hook: "h", caption: "c", difficulty: "medium", clip_type: "opinion", attention_score: 88, emotion_spike: 80, hook_strength: 84, payoff_score: 90, context_needed: 28, retention_risk: 42, edit_difficulty: 64, recommendation: "needs_recut", recut_suggestion: "Trim the setup." },
-      { title: "Best", start_time: 10, end_time: 50, score: 95, reason: "best", hook: "h", caption: "c", difficulty: "easy", clip_type: "reaction", attention_score: 95, emotion_spike: 88, hook_strength: 92, payoff_score: 86, context_needed: 18, retention_risk: 20, edit_difficulty: 22, recommendation: "export", recut_suggestion: "" },
-      { title: "Weak", start_time: 110, end_time: 140, score: 61, reason: "weak", hook: "h", caption: "c", difficulty: "medium", clip_type: "other", attention_score: 55, emotion_spike: 40, hook_strength: 52, payoff_score: 45, context_needed: 60, retention_risk: 62, edit_difficulty: 50, recommendation: "maybe", recut_suggestion: "" }
+      { title: "Too short", start_time: 0, end_time: 12, score: 100, reason: "short", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 100, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "", source_quote: "" },
+      { title: "Too long", start_time: 0, end_time: 400, score: 99, reason: "long", hook: "h", caption: "c", difficulty: "easy", clip_type: "story", attention_score: 99, emotion_spike: 90, hook_strength: 95, payoff_score: 90, context_needed: 10, retention_risk: 10, edit_difficulty: 10, recommendation: "export", recut_suggestion: "", source_quote: "" },
+      { title: "Summary", start_time: 1, end_time: 40, score: 98, reason: "calm explanation", hook: "h", caption: "c", difficulty: "easy", clip_type: "educational", attention_score: 25, emotion_spike: 10, hook_strength: 20, payoff_score: 15, context_needed: 85, retention_risk: 90, edit_difficulty: 30, recommendation: "skip", recut_suggestion: "Needs a sharper reaction.", source_quote: "" },
+      { title: "Needs recut", start_time: 60, end_time: 100, score: 96, reason: "great payoff but starts early", hook: "h", caption: "c", difficulty: "medium", clip_type: "opinion", attention_score: 88, emotion_spike: 80, hook_strength: 84, payoff_score: 90, context_needed: 28, retention_risk: 42, edit_difficulty: 64, recommendation: "needs_recut", recut_suggestion: "Trim the setup.", source_quote: "" },
+      { title: "Best", start_time: 10, end_time: 50, score: 95, reason: "best", hook: "h", caption: "c", difficulty: "easy", clip_type: "reaction", attention_score: 95, emotion_spike: 88, hook_strength: 92, payoff_score: 86, context_needed: 18, retention_risk: 20, edit_difficulty: 22, recommendation: "export", recut_suggestion: "", source_quote: "" },
+      { title: "Weak", start_time: 110, end_time: 140, score: 61, reason: "weak", hook: "h", caption: "c", difficulty: "medium", clip_type: "other", attention_score: 55, emotion_spike: 40, hook_strength: 52, payoff_score: 45, context_needed: 60, retention_risk: 62, edit_difficulty: 50, recommendation: "maybe", recut_suggestion: "", source_quote: "" }
     ]);
 
     expect(ranked.map((item) => item.title)).toEqual(["Best", "Needs recut", "Weak"]);
@@ -148,7 +150,8 @@ describe("stream scan helpers", () => {
       retention_risk: 30,
       edit_difficulty: 35,
       recommendation: index === 2 ? ("skip" as const) : index % 3 === 0 ? ("needs_recut" as const) : ("maybe" as const),
-      recut_suggestion: index % 3 === 0 ? "Trim the setup and start on the reaction." : ""
+      recut_suggestion: index % 3 === 0 ? "Trim the setup and start on the reaction." : "",
+      source_quote: ""
     }));
 
     const ranked = rankClipCandidates(candidates);
@@ -199,5 +202,78 @@ describe("stream scan helpers", () => {
     });
     expect(payload).not.toHaveProperty("attention_score");
     expect(payload).not.toHaveProperty("recommendation");
+  });
+
+  it("extracts the exact transcript quote overlapping a selected timestamp", () => {
+    const quote = extractSourceQuote(
+      [
+        { start: 10, end: 15, text: "Najprv sme riešili manažérov." },
+        { start: 16, end: 21, text: "Potom Ferrari vôbec nechcelo naštartovať." },
+        { start: 22, end: 26, text: "Všetci sa začali smiať." }
+      ],
+      16,
+      26
+    );
+
+    expect(quote).toBe("Potom Ferrari vôbec nechcelo naštartovať. Všetci sa začali smiať.");
+  });
+
+  it("moves unsupported metadata to the nearby timestamp where its quote appears", () => {
+    const candidate = normalizeClipCandidate({
+      title: "Naštartovanie Ferrari",
+      start_time: "00:00:10",
+      end_time: "00:00:35",
+      score: 87,
+      reason: "Ferrari nejde naštartovať.",
+      hook: "Ferrari vôbec nechcelo chytiť.",
+      caption: "Keď Ferrari odmietne štartovať.",
+      difficulty: "easy",
+      clip_type: "funny",
+      attention_score: 90,
+      emotion_spike: 80,
+      hook_strength: 88,
+      payoff_score: 82,
+      context_needed: 20,
+      retention_risk: 24,
+      edit_difficulty: 30,
+      recommendation: "export",
+      recut_suggestion: "Začni pri Ferrari a skonči po reakcii."
+    })!;
+
+    const grounded = groundClipCandidate(candidate, [
+      { start: 10, end: 18, text: "Tu ešte hovoríme o manažéroch a procese." },
+      { start: 42, end: 49, text: "Sadol som do Ferrari a ono vôbec nechcelo naštartovať." },
+      { start: 50, end: 57, text: "Potom sa všetci začali smiať, lebo to bolo absurdné." }
+    ]);
+
+    expect(grounded.start_time).toBe(42);
+    expect(grounded.end_time).toBe(57);
+    expect(grounded.source_quote).toContain("Ferrari");
+    expect(grounded.title).toBe("Naštartovanie Ferrari");
+  });
+
+  it("rewrites and demotes unsupported metadata when no matching quote exists", () => {
+    const candidate = normalizeClipCandidate({
+      title: "Naštartovanie Ferrari",
+      start_time: "00:00:10",
+      end_time: "00:00:35",
+      score: 87,
+      reason: "Ferrari nejde naštartovať.",
+      hook: "Ferrari vôbec nechcelo chytiť.",
+      caption: "Keď Ferrari odmietne štartovať.",
+      difficulty: "easy",
+      clip_type: "funny",
+      recommendation: "export"
+    })!;
+
+    const grounded = groundClipCandidate(candidate, [
+      { start: 10, end: 18, text: "Tu ešte hovoríme o manažéroch a ich rozhodovaní." },
+      { start: 19, end: 30, text: "Dôležité je, kto berie zodpovednosť v tíme." }
+    ]);
+
+    expect(grounded.start_time).toBe(10);
+    expect(grounded.source_quote).toContain("manažéroch");
+    expect(grounded.title).not.toContain("Ferrari");
+    expect(grounded.recommendation).toBe("maybe");
   });
 });

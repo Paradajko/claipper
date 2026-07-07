@@ -54,6 +54,7 @@ export type NormalizedClipCandidate = {
   edit_difficulty: number;
   recommendation: (typeof clipRecommendations)[number];
   recut_suggestion: string;
+  source_quote: string;
 };
 
 const aiCandidateSchema = z.object({
@@ -74,7 +75,8 @@ const aiCandidateSchema = z.object({
   retention_risk: z.number().min(0).max(100).optional(),
   edit_difficulty: z.number().min(0).max(100).optional(),
   recommendation: z.enum(clipRecommendations).optional(),
-  recut_suggestion: z.string().optional()
+  recut_suggestion: z.string().optional(),
+  source_quote: z.string().optional()
 });
 
 export function parseTimestampToSeconds(timestamp: string) {
@@ -153,7 +155,8 @@ export function normalizeClipCandidate(value: unknown): NormalizedClipCandidate 
       retention_risk: normalizeScore(parsed.data.retention_risk, 50),
       edit_difficulty: normalizeScore(parsed.data.edit_difficulty, 50),
       recommendation: parsed.data.recommendation ?? "maybe",
-      recut_suggestion: parsed.data.recut_suggestion?.trim() ?? ""
+      recut_suggestion: parsed.data.recut_suggestion?.trim() ?? "",
+      source_quote: parsed.data.source_quote?.trim() ?? ""
     };
   } catch {
     return null;
@@ -200,11 +203,131 @@ export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandi
         retention_risk: idea.retention_risk,
         edit_difficulty: idea.edit_difficulty,
         recommendation: idea.recommendation,
-        recut_suggestion: idea.recut_suggestion
+        recut_suggestion: idea.recut_suggestion,
+        source_quote: idea.source_quote
       }
     }
   };
 }
+
+export function extractSourceQuote(items: TranscriptItem[], startTime: number, endTime: number) {
+  return items
+    .filter((item) => item.end > startTime && item.start < endTime)
+    .map((item) => item.text.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function groundClipCandidate(candidate: NormalizedClipCandidate, items: TranscriptItem[]): NormalizedClipCandidate {
+  const selectedQuote = extractSourceQuote(items, candidate.start_time, candidate.end_time);
+  if (metadataMatchesQuote(candidate, selectedQuote)) {
+    return { ...candidate, source_quote: selectedQuote };
+  }
+
+  const nearbyRange = findBestQuoteRange(candidate, items);
+  if (nearbyRange) {
+    const movedQuote = extractSourceQuote(items, nearbyRange.start, nearbyRange.end);
+    if (metadataMatchesQuote(candidate, movedQuote)) {
+      return {
+        ...candidate,
+        start_time: nearbyRange.start,
+        end_time: nearbyRange.end,
+        source_quote: movedQuote
+      };
+    }
+  }
+
+  const fallbackQuote = selectedQuote || extractSourceQuote(items, candidate.start_time, candidate.end_time) || candidate.hook;
+  const groundedText = fallbackQuote.slice(0, 180);
+  return {
+    ...candidate,
+    title: titleFromQuote(fallbackQuote),
+    reason: "Selected timestamp was grounded to the overlapping transcript text.",
+    hook: groundedText,
+    caption: groundedText,
+    recommendation: candidate.recommendation === "skip" ? "skip" : "maybe",
+    recut_suggestion: fallbackQuote ? "Metadata was rewritten to match the selected timestamp." : candidate.recut_suggestion,
+    source_quote: fallbackQuote
+  };
+}
+
+function metadataMatchesQuote(candidate: NormalizedClipCandidate, quote: string) {
+  const metadataTokens = contentTokens([candidate.title, candidate.hook, candidate.caption].join(" "));
+  if (metadataTokens.length === 0) return Boolean(quote.trim());
+  const quoteTokens = new Set(contentTokens(quote));
+  const matches = metadataTokens.filter((token) => quoteTokens.has(token)).length;
+  return matches >= Math.min(2, metadataTokens.length);
+}
+
+function findBestQuoteRange(candidate: NormalizedClipCandidate, items: TranscriptItem[]) {
+  const metadataTokens = contentTokens([candidate.title, candidate.hook, candidate.caption].join(" "));
+  if (metadataTokens.length === 0) return null;
+
+  let best: { index: number; score: number } | null = null;
+  for (const [index, item] of items.entries()) {
+    const quoteTokens = new Set(contentTokens(item.text));
+    const score = metadataTokens.filter((token) => quoteTokens.has(token)).length;
+    if (score > 0 && (!best || score > best.score)) best = { index, score };
+  }
+
+  if (!best) return null;
+
+  const start = items[best.index].start;
+  let end = items[best.index].end;
+  for (let index = best.index + 1; index < items.length && end - start < 20; index += 1) {
+    if (items[index].start - end > 5) break;
+    end = items[index].end;
+  }
+  return { start, end };
+}
+
+function titleFromQuote(quote: string) {
+  const compact = quote.replace(/\s+/g, " ").trim();
+  if (!compact) return "Grounded moment";
+  const sentence = compact.split(/[.!?]/)[0]?.trim() || compact;
+  return sentence.slice(0, 80);
+}
+
+function contentTokens(value: string) {
+  return normalizeText(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !stopWords.has(token));
+}
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const stopWords = new Set([
+  "toto",
+  "tato",
+  "tento",
+  "kedy",
+  "ked",
+  "potom",
+  "este",
+  "bolo",
+  "bude",
+  "som",
+  "sme",
+  "ste",
+  "they",
+  "this",
+  "that",
+  "with",
+  "from",
+  "about",
+  "when",
+  "then"
+]);
 
 function normalizeScore(value: number | undefined, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
