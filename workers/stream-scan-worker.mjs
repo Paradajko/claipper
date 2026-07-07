@@ -32,6 +32,7 @@ const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
+const MOMENT_FINDER_VERSION = "v2.1";
 const CLIP_DIFFICULTIES = ["easy", "medium", "hard"];
 const CLIP_TYPES = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"];
 const CLIP_RECOMMENDATIONS = ["export", "needs_recut", "maybe", "skip"];
@@ -219,10 +220,12 @@ async function processAnalyzeVideo(job) {
   for (const segment of segments) {
     candidates.push(...(await analyzeTranscriptSegment(segment)));
   }
+  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} local candidates found: ${candidates.length}`);
 
   await updateJob(job.id, "running", "ranking_candidates", 90);
   await updateVideo(video.id, "ranking", 90, "Ranking the strongest moments.");
   const ranked = await rankCandidatesWithAi(candidates);
+  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${ranked.length}`);
   await updateJob(job.id, "running", "saving_clip_ideas", 95);
   await saveClipIdeas(video.id, ranked);
 
@@ -730,7 +733,8 @@ async function saveTranscriptSegments(videoId, transcriptId, segments) {
 }
 
 async function saveClipIdeas(videoId, ideas) {
-  await supabase.from("clip_ideas").delete().eq("video_id", videoId);
+  const { error: deleteError } = await supabase.from("clip_ideas").delete().eq("video_id", videoId);
+  if (deleteError) throw new Error(deleteError.message);
   if (ideas.length === 0) return;
   const { error } = await supabase.from("clip_ideas").insert(ideas.map((idea) => clipIdeaInsertPayload(videoId, idea, "stream_scan_worker")));
   if (error) throw new Error(error.message);
@@ -923,7 +927,7 @@ function clipIdeaInsertPayload(videoId, idea, source) {
     status: "idea",
     raw_data: {
       source,
-      moment_finder_version: "v2.1",
+      moment_finder_version: MOMENT_FINDER_VERSION,
       moment_v2: {
         attention_score: idea.attention_score,
         emotion_spike: idea.emotion_spike,

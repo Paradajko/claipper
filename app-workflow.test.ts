@@ -137,6 +137,7 @@ describe("AI-first app workflow naming", () => {
 
     expect(detailPage).toContain("Moment Review");
     expect(detailPage).toContain("MomentReviewClient");
+    expect(detailPage).toContain('dynamic = "force-dynamic"');
     expect(reviewClient).toContain("Moment Review");
     expect(reviewClient).toContain("Found moments");
     expect(reviewClient).toContain("Best moments");
@@ -159,9 +160,16 @@ describe("AI-first app workflow naming", () => {
     expect(videoRoute).toContain("createStorageSignedUrl");
     expect(read("app/api/stream-scan/videos/[id]/process/route.ts")).toContain('job_type", "analyze_video"');
     expect(read("app/api/stream-scan/videos/[id]/process/route.ts")).toContain(".in(\"status\", [\"queued\", \"running\"])");
+    expect(read("app/api/stream-scan/videos/[id]/process/route.ts")).toContain('from("clip_ideas").delete().eq("video_id", id)');
+    expect(read("app/api/stream-scan/videos/[id]/process/route.ts")).toContain('revalidatePath(`/app/content-lab/${id}`)');
     expect(reviewClient).toContain("Why it works");
     expect(reviewClient).toContain("Hook");
     expect(reviewClient).toContain("Caption");
+    expect(reviewClient).toContain("moment_finder_version");
+    expect(reviewClient).toContain("retention_risk");
+    expect(reviewClient).toContain("recut_suggestion");
+    expect(reviewClient).toContain("formatMomentVersion");
+    expect(reviewClient).toContain("recommendationClass");
     expect(reviewClient).toContain("idea, index");
     expect(detailPage).toContain("Uploaded");
     expect(detailPage).toContain("Audio");
@@ -180,6 +188,15 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).not.toContain("Ranked moments");
     expect(reviewClient).not.toContain("Run Stream Scan again");
     expect(reviewClient).not.toContain("Developer debug");
+  });
+
+  it("logs v2.1 moment finder candidate counts in the worker", () => {
+    const worker = read("workers/stream-scan-worker.mjs");
+
+    expect(worker).toContain('MOMENT_FINDER_VERSION = "v2.1"');
+    expect(worker).toContain("local candidates found");
+    expect(worker).toContain("final ranked candidates");
+    expect(worker).toContain("moment_finder_version");
   });
 
   it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {

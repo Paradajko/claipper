@@ -4,6 +4,8 @@ import { createStorageSignedUrl, getLatestWorkerHeartbeat, getStreamVideo } from
 
 const reviewStepLabels = ["Uploaded", "Audio", "Transcript", "Analysis", "Ranked", "Ready"];
 
+export const dynamic = "force-dynamic";
+
 export default async function StreamVideoDetailPage({
   params,
   searchParams

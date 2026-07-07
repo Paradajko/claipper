@@ -39,7 +39,7 @@ export function MomentReviewClient({
   const [optimisticAnalysis, setOptimisticAnalysis] = useState(false);
   const video = snapshot.video;
   const workerHeartbeat = snapshot.workerHeartbeat;
-  const ideas = useMemo(() => [...(video.clip_ideas ?? [])].sort((first, second) => second.score - first.score), [video.clip_ideas]);
+  const ideas = useMemo(() => [...(video.clip_ideas ?? [])].filter((idea) => momentV2Scores(idea).recommendation !== "skip").sort((first, second) => second.score - first.score), [video.clip_ideas]);
   const analysisJob = useMemo(() => latestJobByType(video.processing_jobs, "analyze_video"), [video.processing_jobs]);
   const renderJobs = useMemo(() => (video.processing_jobs ?? []).filter((job) => job.job_type === "render_ready_clip"), [video.processing_jobs]);
   const hasActiveAnalysis = optimisticAnalysis || isActiveJob(analysisJob) || isVideoProcessing(video.status, analysisJob);
@@ -329,6 +329,7 @@ function MomentCard({
               <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">{formatRange(idea.start_time, idea.end_time)}</Badge>
               <Badge className="border-lime-300/30 bg-lime-300/10 text-lime-100">Score {idea.score}</Badge>
               <Badge className={recommendationClass(scores.recommendation)}>{formatRecommendation(scores.recommendation)}</Badge>
+              <Badge className="border-white/10 bg-white/5 text-slate-300">{formatMomentVersion(scores.moment_finder_version)}</Badge>
             </div>
           </div>
         </div>
@@ -419,6 +420,7 @@ function formatCaptionMode(clip: Clip) {
 function momentV2Scores(idea: ClipIdea) {
   const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
   return {
+    moment_finder_version: typeof idea.raw_data?.moment_finder_version === "string" ? idea.raw_data.moment_finder_version : null,
     attention_score: scoreFromRaw(rawScores.attention_score, idea.score),
     emotion_spike: scoreFromRaw(rawScores.emotion_spike, 50),
     hook_strength: scoreFromRaw(rawScores.hook_strength, idea.score),
@@ -444,6 +446,10 @@ function formatRecommendation(value: MomentRecommendation) {
   if (value === "needs_recut") return "Needs recut";
   if (value === "skip") return "Skip";
   return "Maybe";
+}
+
+function formatMomentVersion(value: string | null) {
+  return value ?? "legacy";
 }
 
 function recommendationClass(value: MomentRecommendation) {

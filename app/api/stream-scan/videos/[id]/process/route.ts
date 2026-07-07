@@ -40,6 +40,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.redirect(new URL(`/app/content-lab/${id}`, request.url), { status: 303 });
   }
 
+  const { error: deleteIdeasError } = await supabase.from("clip_ideas").delete().eq("video_id", id);
+  if (deleteIdeasError) {
+    return NextResponse.redirect(new URL(`/app/content-lab/${id}?error=${encodeURIComponent(deleteIdeasError.message)}`, request.url), { status: 303 });
+  }
+
   const { error: updateError } = await supabase
     .from("videos")
     .update({
