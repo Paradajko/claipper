@@ -192,6 +192,34 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).not.toContain("Developer debug");
   });
 
+  it("lets users manage production status and final copy on moment cards", () => {
+    const reviewClient = read("components/moment-review-client.tsx");
+    const updateRoute = read("app/api/stream-scan/clip-ideas/[id]/route.ts");
+
+    for (const status of ["selected", "rejected", "needs_edit", "exported", "uploaded"]) {
+      expect(reviewClient).toContain(status);
+      expect(updateRoute).toContain(status);
+    }
+
+    for (const field of ["final_hook", "final_caption", "edit_note"]) {
+      expect(reviewClient).toContain(field);
+      expect(updateRoute).toContain(field);
+    }
+
+    expect(reviewClient).toContain("ProductionStatusFilter");
+    expect(reviewClient).toContain("All / Selected / Needs edit / Exported / Uploaded");
+    expect(reviewClient).toContain("handleProductionUpdate");
+    expect(reviewClient).toContain(`/api/stream-scan/clip-ideas/$`);
+    expect(reviewClient).toContain("production.final_hook || idea.hook");
+    expect(reviewClient).toContain("production.final_caption || idea.caption");
+    expect(updateRoute).toContain("export async function PATCH");
+    expect(updateRoute).toContain("raw_data");
+    expect(updateRoute).toContain("moment_v2");
+    expect(updateRoute).toContain("production");
+    expect(updateRoute).toContain("revalidatePath");
+    expect(reviewClient).toContain("Export 9:16 Clip");
+  });
+
   it("logs v2.1 moment finder candidate counts in the worker", () => {
     const worker = read("workers/stream-scan-worker.mjs");
 

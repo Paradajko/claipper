@@ -21,6 +21,32 @@ type ExportStatus = {
 };
 
 type MomentRecommendation = "export" | "needs_recut" | "maybe" | "skip";
+type MomentProductionStatus = "selected" | "rejected" | "needs_edit" | "exported" | "uploaded";
+type MomentProductionFilter = "all" | Exclude<MomentProductionStatus, "rejected">;
+type MomentProductionUpdate = {
+  status?: MomentProductionStatus;
+  final_hook?: string;
+  final_caption?: string;
+  edit_note?: string;
+};
+
+const productionStatusOptions: Array<{ label: string; value: MomentProductionStatus }> = [
+  { label: "Selected", value: "selected" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Needs edit", value: "needs_edit" },
+  { label: "Exported", value: "exported" },
+  { label: "Uploaded", value: "uploaded" }
+];
+
+const productionFilterOptions: Array<{ label: string; value: MomentProductionFilter }> = [
+  { label: "All", value: "all" },
+  { label: "Selected", value: "selected" },
+  { label: "Needs edit", value: "needs_edit" },
+  { label: "Exported", value: "exported" },
+  { label: "Uploaded", value: "uploaded" }
+];
+
+const productionFilterLabel = "All / Selected / Needs edit / Exported / Uploaded";
 
 export function MomentReviewClient({
   error,
@@ -37,9 +63,11 @@ export function MomentReviewClient({
   const [pollError, setPollError] = useState<string | null>(null);
   const [optimisticExportIdeaIds, setOptimisticExportIdeaIds] = useState<Set<string>>(new Set());
   const [optimisticAnalysis, setOptimisticAnalysis] = useState(false);
+  const [productionFilter, setProductionFilter] = useState<MomentProductionFilter>("all");
   const video = snapshot.video;
   const workerHeartbeat = snapshot.workerHeartbeat;
   const ideas = useMemo(() => [...(video.clip_ideas ?? [])].filter((idea) => momentV2Scores(idea).recommendation !== "skip").sort((first, second) => second.score - first.score), [video.clip_ideas]);
+  const visibleIdeas = useMemo(() => (productionFilter === "all" ? ideas : ideas.filter((idea) => momentProduction(idea).status === productionFilter)), [ideas, productionFilter]);
   const analysisJob = useMemo(() => latestJobByType(video.processing_jobs, "analyze_video"), [video.processing_jobs]);
   const renderJobs = useMemo(() => (video.processing_jobs ?? []).filter((job) => job.job_type === "render_ready_clip"), [video.processing_jobs]);
   const hasActiveAnalysis = optimisticAnalysis || isActiveJob(analysisJob) || isVideoProcessing(video.status, analysisJob);
@@ -126,6 +154,26 @@ export function MomentReviewClient({
     }
   }
 
+  async function handleProductionUpdate(idea: ClipIdea, update: MomentProductionUpdate) {
+    setPollError(null);
+    const response = await fetch(`/api/stream-scan/clip-ideas/${idea.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update)
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error ?? "Could not update moment.");
+    if (payload.idea) {
+      setSnapshot((current) => ({
+        ...current,
+        video: {
+          ...current.video,
+          clip_ideas: (current.video.clip_ideas ?? []).map((candidate) => (candidate.id === idea.id ? payload.idea : candidate))
+        }
+      }));
+    }
+  }
+
   return (
     <AppShell title={title} eyebrow="Content Lab">
       <div className="mx-auto max-w-6xl space-y-5">
@@ -167,7 +215,10 @@ export function MomentReviewClient({
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Best moments</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Review the strongest timestamps, hooks and captions, then export the best vertical clip.</p>
             </div>
-            <Badge className="w-fit border-white/10 bg-black/20 text-slate-200">{ideas.length} results</Badge>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <ProductionStatusFilter onChange={setProductionFilter} value={productionFilter} />
+              <Badge className="w-fit border-white/10 bg-black/20 text-slate-200">{visibleIdeas.length}/{ideas.length} results</Badge>
+            </div>
           </div>
 
           {video.status === "failed" ? (
@@ -183,16 +234,19 @@ export function MomentReviewClient({
           ) : null}
 
           <div className="grid gap-4">
-            {ideas.length > 0 ? (
-              ideas.map((idea, index) => (
+            {visibleIdeas.length > 0 ? (
+              visibleIdeas.map((idea, index) => (
                 <MomentCard
                   key={idea.id}
                   exportStatus={exportStatus(idea, renderJobs, snapshot.clips, optimisticExportIdeaIds)}
                   idea={idea}
                   index={index}
                   onExportSubmit={handleExportSubmit}
+                  onProductionUpdate={handleProductionUpdate}
                 />
               ))
+            ) : ideas.length > 0 ? (
+              <EmptyNotice>No moments match this production filter.</EmptyNotice>
             ) : video.status !== "failed" && !hasActiveAnalysis ? (
               <EmptyNotice>No moments yet. Run Analysis Again to find hooks, timestamps and captions.</EmptyNotice>
             ) : null}
@@ -218,6 +272,26 @@ export function MomentReviewClient({
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ProductionStatusFilter({ onChange, value }: { onChange: (value: MomentProductionFilter) => void; value: MomentProductionFilter }) {
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label={productionFilterLabel}>
+      {productionFilterOptions.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={clsx(
+            "min-h-8 rounded-md border px-2.5 py-1 text-xs font-semibold",
+            value === option.value ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100" : "border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-slate-200"
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -307,14 +381,49 @@ function MomentCard({
   exportStatus,
   idea,
   index,
-  onExportSubmit
+  onExportSubmit,
+  onProductionUpdate
 }: {
   exportStatus: ExportStatus;
   idea: ClipIdea;
   index: number;
   onExportSubmit: (event: FormEvent<HTMLFormElement>, idea: ClipIdea) => void;
+  onProductionUpdate: (idea: ClipIdea, update: MomentProductionUpdate) => Promise<void>;
 }) {
   const scores = momentV2Scores(idea);
+  const production = useMemo(() => momentProduction(idea), [idea]);
+  const [draftProduction, setDraftProduction] = useState(production);
+  const [productionError, setProductionError] = useState<string | null>(null);
+  const [savingProduction, setSavingProduction] = useState(false);
+
+  useEffect(() => {
+    setDraftProduction(production);
+  }, [production]);
+
+  async function saveProductionUpdate(update: MomentProductionUpdate) {
+    const nextProduction = { ...draftProduction, ...update };
+    setDraftProduction(nextProduction);
+    setSavingProduction(true);
+    setProductionError(null);
+    try {
+      await onProductionUpdate(idea, update);
+    } catch (caught) {
+      setDraftProduction(production);
+      setProductionError(caught instanceof Error ? caught.message : "Could not update moment.");
+    } finally {
+      setSavingProduction(false);
+    }
+  }
+
+  async function handleProductionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    await saveProductionUpdate({
+      final_hook: String(formData.get("final_hook") ?? ""),
+      final_caption: String(formData.get("final_caption") ?? ""),
+      edit_note: String(formData.get("edit_note") ?? "")
+    });
+  }
 
   return (
     <Card className="border-white/10 bg-white/[0.035] p-4 sm:p-5">
@@ -329,10 +438,26 @@ function MomentCard({
               <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">{formatRange(idea.start_time, idea.end_time)}</Badge>
               <Badge className="border-lime-300/30 bg-lime-300/10 text-lime-100">Score {idea.score}</Badge>
               <Badge className={recommendationClass(scores.recommendation)}>{formatRecommendation(scores.recommendation)}</Badge>
+              <Badge className={productionStatusClass(draftProduction.status)}>{formatProductionStatus(draftProduction.status)}</Badge>
               <Badge className="border-white/10 bg-white/5 text-slate-300">{formatMomentVersion(scores.moment_finder_version)}</Badge>
             </div>
           </div>
         </div>
+        <label className="flex w-full flex-col gap-1 sm:w-44">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Status</span>
+          <select
+            value={draftProduction.status}
+            disabled={savingProduction}
+            onChange={(event) => void saveProductionUpdate({ status: event.currentTarget.value as MomentProductionStatus })}
+            className="min-h-10 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-slate-100 outline-none focus:border-emerald-300/50 disabled:opacity-60"
+          >
+            {productionStatusOptions.map((option) => (
+              <option key={option.value} value={option.value} className="bg-slate-950 text-slate-100">
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="mt-5 grid gap-3">
@@ -343,6 +468,51 @@ function MomentCard({
         {scores.recut_suggestion ? <p className="-mt-1 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
         {scores.source_quote ? <p className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-slate-400">Source quote: {scores.source_quote}</p> : null}
       </div>
+
+      <form className="mt-5 grid gap-3 rounded-md border border-white/10 bg-black/20 p-3" onSubmit={handleProductionSubmit}>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Final hook</span>
+            <textarea
+              name="final_hook"
+              rows={3}
+              value={draftProduction.final_hook}
+              onChange={(event) => setDraftProduction((current) => ({ ...current, final_hook: event.currentTarget.value }))}
+              className="min-h-24 rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm leading-5 text-slate-100 outline-none focus:border-emerald-300/50"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Final caption</span>
+            <textarea
+              name="final_caption"
+              rows={3}
+              value={draftProduction.final_caption}
+              onChange={(event) => setDraftProduction((current) => ({ ...current, final_caption: event.currentTarget.value }))}
+              className="min-h-24 rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm leading-5 text-slate-100 outline-none focus:border-emerald-300/50"
+            />
+          </label>
+        </div>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Edit note</span>
+          <textarea
+            name="edit_note"
+            rows={2}
+            value={draftProduction.edit_note}
+            onChange={(event) => setDraftProduction((current) => ({ ...current, edit_note: event.currentTarget.value }))}
+            className="min-h-20 rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm leading-5 text-slate-100 outline-none focus:border-emerald-300/50"
+          />
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="submit"
+            disabled={savingProduction}
+            className="inline-flex min-h-9 w-full items-center justify-center rounded-md border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {savingProduction ? "Saving..." : "Save production fields"}
+          </button>
+          {productionError ? <p className="text-xs text-rose-200">{productionError}</p> : null}
+        </div>
+      </form>
 
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
         <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="flex flex-col gap-3 sm:flex-row sm:items-center" onSubmit={(event) => onExportSubmit(event, idea)}>
@@ -435,12 +605,29 @@ function momentV2Scores(idea: ClipIdea) {
   };
 }
 
+function momentProduction(idea: ClipIdea) {
+  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
+  const production: Record<string, unknown> = isRecord(rawScores.production) ? rawScores.production : {};
+  const finalHook = production.final_hook || idea.hook;
+  const finalCaption = production.final_caption || idea.caption;
+  return {
+    status: productionStatusFromRaw(production.status),
+    final_hook: typeof finalHook === "string" ? finalHook : "",
+    final_caption: typeof finalCaption === "string" ? finalCaption : "",
+    edit_note: typeof production.edit_note === "string" ? production.edit_note : ""
+  };
+}
+
 function scoreFromRaw(value: unknown, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
 }
 
 function recommendationFromRaw(value: unknown): MomentRecommendation {
   return value === "export" || value === "needs_recut" || value === "maybe" || value === "skip" ? value : "maybe";
+}
+
+function productionStatusFromRaw(value: unknown): MomentProductionStatus {
+  return value === "selected" || value === "rejected" || value === "needs_edit" || value === "exported" || value === "uploaded" ? value : "selected";
 }
 
 function formatRecommendation(value: MomentRecommendation) {
@@ -459,6 +646,19 @@ function recommendationClass(value: MomentRecommendation) {
   if (value === "needs_recut") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
   if (value === "skip") return "border-rose-300/25 bg-rose-300/10 text-rose-100";
   return "border-white/10 bg-white/5 text-slate-200";
+}
+
+function formatProductionStatus(value: MomentProductionStatus) {
+  if (value === "needs_edit") return "Needs edit";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function productionStatusClass(value: MomentProductionStatus) {
+  if (value === "selected") return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
+  if (value === "needs_edit") return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  if (value === "exported") return "border-lime-300/25 bg-lime-300/10 text-lime-100";
+  if (value === "uploaded") return "border-sky-300/25 bg-sky-300/10 text-sky-100";
+  return "border-rose-300/25 bg-rose-300/10 text-rose-100";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
