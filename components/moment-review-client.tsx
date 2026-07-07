@@ -314,6 +314,8 @@ function MomentCard({
   index: number;
   onExportSubmit: (event: FormEvent<HTMLFormElement>, idea: ClipIdea) => void;
 }) {
+  const scores = momentV2Scores(idea);
+
   return (
     <Card className="border-white/10 bg-white/[0.035] p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -326,6 +328,7 @@ function MomentCard({
             <div className="mt-3 flex flex-wrap gap-2">
               <Badge className="border-emerald-300/25 bg-emerald-300/10 text-emerald-100">{formatRange(idea.start_time, idea.end_time)}</Badge>
               <Badge className="border-lime-300/30 bg-lime-300/10 text-lime-100">Score {idea.score}</Badge>
+              <Badge className={recommendationClass(scores.recommendation)}>{formatRecommendation(scores.recommendation)}</Badge>
             </div>
           </div>
         </div>
@@ -336,6 +339,7 @@ function MomentCard({
         <LabeledText label="Why it works">{idea.reason}</LabeledText>
         <LabeledText label="Hook">{idea.hook}</LabeledText>
         <LabeledText label="Caption">{idea.caption}</LabeledText>
+        {scores.recut_suggestion ? <p className="-mt-1 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
       </div>
 
       <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
@@ -367,7 +371,6 @@ function MomentV2ScoreStrip({ idea }: { idea: ClipIdea }) {
   return (
     <div className="rounded-md border border-white/10 bg-black/20 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className={recommendationClass(scores.recommendation)}>{formatRecommendation(scores.recommendation)}</Badge>
         <CompactScore label="Attention" value={scores.attention_score} />
         <CompactScore label="Emotion" value={scores.emotion_spike} />
         <CompactScore label="Hook" value={scores.hook_strength} />
@@ -376,7 +379,6 @@ function MomentV2ScoreStrip({ idea }: { idea: ClipIdea }) {
         <CompactScore label="Risk" value={scores.retention_risk} inverse />
         <CompactScore label="Edit" value={scores.edit_difficulty} inverse />
       </div>
-      {scores.recut_suggestion ? <p className="mt-2 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
     </div>
   );
 }

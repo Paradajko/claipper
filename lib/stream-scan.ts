@@ -165,7 +165,7 @@ export function normalizeClipCandidates(value: unknown): NormalizedClipCandidate
   return value.map(normalizeClipCandidate).filter((candidate): candidate is NormalizedClipCandidate => candidate !== null);
 }
 
-export function rankClipCandidates(candidates: NormalizedClipCandidate[], limit = 20) {
+export function rankClipCandidates(candidates: NormalizedClipCandidate[], limit = 8) {
   return [...candidates]
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
@@ -190,7 +190,7 @@ export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandi
     status: "idea",
     raw_data: {
       source,
-      moment_finder_version: "v2",
+      moment_finder_version: "v2.1",
       moment_v2: {
         attention_score: idea.attention_score,
         emotion_spike: idea.emotion_spike,

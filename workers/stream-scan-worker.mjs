@@ -768,7 +768,7 @@ async function analyzeTranscriptSegment(segment) {
       {
         role: "system",
         content:
-          "You are Claipper's Moment Finder v2 producer. Return only structured JSON. Find 0-2 scroll-stopping short-form moments, not summaries. Prefer 20-60 seconds with emotional spikes, reactions, conflict, hot takes, surprising statements, funny moments and clear payoff. Penalize calm educational explanations, intros, outros, thank-you sections and moments that need too much context. For Slovak/Czech transcripts, preserve meaning and judge hooks, emotion and payoff in that language."
+          "You are Claipper's Moment Finder v2.1 producer. Return only structured JSON. Find 3-5 scroll-stopping short-form moments from this segment when possible, not summaries. Use the same language as the transcript for title, hook, caption and recut_suggestion. For Slovak/Czech transcripts, write those fields in Slovak/Czech, never English. Prefer emotion, conflict, strong opinion, surprising statements, funny reactions, tension, clear payoff and a scroll-stopping first sentence. Penalize generic gratitude, calm explanations, intros, outros, thank-you sections, nice-but-boring moments and anything that needs too much context."
       },
       {
         role: "user",
@@ -776,7 +776,7 @@ async function analyzeTranscriptSegment(segment) {
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
           "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
-          "Return JSON as {\"candidates\":[{\"title\":\"string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"short hook text\",\"caption\":\"social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"specific trim/edit note or empty string\"}]}. Keep each candidate 20-60 seconds. Return fewer candidates if only generic material is present.",
+          "Return JSON as {\"candidates\":[{\"title\":\"same-language string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"same-language short hook text\",\"caption\":\"same-language social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"same-language specific trim/edit note or empty string\"}]}. Keep each candidate 20-60 seconds. Return 3-5 candidates when the segment has enough material. Use maybe or needs_recut for imperfect but interesting moments; use skip only for truly boring/generic material.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -789,7 +789,7 @@ async function analyzeTranscriptSegment(segment) {
 }
 
 async function rankCandidatesWithAi(candidates) {
-  const locallyRanked = rankClipCandidates(candidates, 12);
+  const locallyRanked = rankClipCandidates(candidates, 8);
   if (locallyRanked.length <= 1 || !openai) return locallyRanked;
   const completion = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
@@ -798,7 +798,7 @@ async function rankCandidatesWithAi(candidates) {
       {
         role: "system",
         content:
-          "Rank Claipper Moment Finder v2 candidates. Return only structured JSON. Keep only the strongest 5-12 moments. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic summaries, calm educational sections, intros, outros and thank-you sections. Keep Slovak/Czech nuance when judging hot takes, reactions and humor."
+          "Rank Claipper Moment Finder v2.1 candidates. Return only structured JSON. Keep the strongest 3-8 non-skip moments unless the transcript is extremely short. Do not collapse to one result when multiple maybe or needs_recut moments exist. Keep title, hook, caption and recut_suggestion in the source transcript language; for Slovak/Czech content, never translate those fields to English. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic gratitude, summaries, calm explanations, intros, outros, thank-you sections and nice-but-boring moments."
       },
       {
         role: "user",
@@ -809,7 +809,9 @@ async function rankCandidatesWithAi(candidates) {
     max_tokens: 3000
   });
   const aiRanked = parseCandidatesJson(completion.choices[0]?.message.content ?? "");
-  return aiRanked.length > 0 ? rankClipCandidates(aiRanked, 12) : locallyRanked;
+  const rankedAi = aiRanked.length > 0 ? rankClipCandidates(aiRanked, 8) : [];
+  if (rankedAi.length >= Math.min(3, locallyRanked.length)) return rankedAi;
+  return locallyRanked;
 }
 
 function toTranscriptItems(transcript) {
@@ -921,7 +923,7 @@ function clipIdeaInsertPayload(videoId, idea, source) {
     status: "idea",
     raw_data: {
       source,
-      moment_finder_version: "v2",
+      moment_finder_version: "v2.1",
       moment_v2: {
         attention_score: idea.attention_score,
         emotion_spike: idea.emotion_spike,

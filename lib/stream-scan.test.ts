@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTranscriptSegments,
+  clipIdeaInsertPayload,
   normalizeClipCandidate,
   parseTimestampToSeconds,
   rankClipCandidates,
@@ -126,5 +127,77 @@ describe("stream scan helpers", () => {
     ]);
 
     expect(ranked.map((item) => item.title)).toEqual(["Best", "Needs recut", "Weak"]);
+  });
+
+  it("keeps multiple visible v2.1 opportunities while hiding only skip recommendations", () => {
+    const candidates = Array.from({ length: 10 }, (_, index) => ({
+      title: `Moment ${index}`,
+      start_time: index * 70,
+      end_time: index * 70 + 38,
+      score: 80 - index,
+      reason: "Has a clear reaction or opinion.",
+      hook: "Sharp first sentence.",
+      caption: "Worth testing.",
+      difficulty: "easy" as const,
+      clip_type: "reaction" as const,
+      attention_score: 80 - index,
+      emotion_spike: 70,
+      hook_strength: 75,
+      payoff_score: 72,
+      context_needed: 25,
+      retention_risk: 30,
+      edit_difficulty: 35,
+      recommendation: index === 2 ? ("skip" as const) : index % 3 === 0 ? ("needs_recut" as const) : ("maybe" as const),
+      recut_suggestion: index % 3 === 0 ? "Trim the setup and start on the reaction." : ""
+    }));
+
+    const ranked = rankClipCandidates(candidates);
+
+    expect(ranked).toHaveLength(8);
+    expect(ranked.some((candidate) => candidate.recommendation === "skip")).toBe(false);
+    expect(ranked.some((candidate) => candidate.recommendation === "maybe")).toBe(true);
+    expect(ranked.some((candidate) => candidate.recommendation === "needs_recut")).toBe(true);
+  });
+
+  it("stores v2.1 scoring metadata without adding database columns", () => {
+    const candidate = normalizeClipCandidate({
+      title: "To je dosť tvrdý názor",
+      start_time: "00:02:10",
+      end_time: "00:02:44",
+      score: 86,
+      reason: "Silný názor s jasnou reakciou.",
+      hook: "Toto by som nikdy nepovedal nahlas.",
+      caption: "Keď príde nepríjemná pravda.",
+      difficulty: "medium",
+      clip_type: "opinion",
+      attention_score: 88,
+      emotion_spike: 82,
+      hook_strength: 91,
+      payoff_score: 79,
+      context_needed: 20,
+      retention_risk: 28,
+      edit_difficulty: 42,
+      recommendation: "needs_recut",
+      recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii."
+    });
+
+    const payload = clipIdeaInsertPayload("video-1", candidate!, "test");
+
+    expect(payload).toMatchObject({
+      video_id: "video-1",
+      title: "To je dosť tvrdý názor",
+      score: 86,
+      raw_data: {
+        source: "test",
+        moment_finder_version: "v2.1",
+        moment_v2: {
+          attention_score: 88,
+          recommendation: "needs_recut",
+          recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii."
+        }
+      }
+    });
+    expect(payload).not.toHaveProperty("attention_score");
+    expect(payload).not.toHaveProperty("recommendation");
   });
 });
