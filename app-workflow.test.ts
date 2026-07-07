@@ -201,11 +201,27 @@ describe("AI-first app workflow naming", () => {
       expect(updateRoute).toContain(status);
     }
 
-    for (const field of ["final_hook", "final_caption", "edit_note"]) {
+    for (const field of ["final_hook", "final_caption", "edit_note", "visual_notes"]) {
       expect(reviewClient).toContain(field);
       expect(updateRoute).toContain(field);
     }
 
+    expect(reviewClient).toContain("Edit Pack");
+    expect(reviewClient).toContain("Copy Hook");
+    expect(reviewClient).toContain("Copy Caption");
+    expect(reviewClient).toContain("Copy Edit Notes");
+    expect(reviewClient).toContain("visual ideas");
+    expect(reviewClient).toContain("defaultVisualNotes");
+    expect(reviewClient).toContain("copyToClipboard");
+    expect(reviewClient).toContain("navigator.clipboard.writeText");
+    expect(reviewClient).toContain("artist face image");
+    expect(reviewClient).toContain("album cover");
+    expect(reviewClient).toContain("tweet/headline screenshot");
+    expect(reviewClient).toContain("quote card");
+    expect(reviewClient).toContain("zoom on reaction");
+    expect(reviewClient).toContain("edit_difficulty");
+    expect(reviewClient).toContain("recut_suggestion");
+    expect(reviewClient).toContain("source_quote");
     expect(reviewClient).toContain("ProductionStatusFilter");
     expect(reviewClient).toContain("All / Selected / Needs edit / Exported / Uploaded");
     expect(reviewClient).toContain("handleProductionUpdate");

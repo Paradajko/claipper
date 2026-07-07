@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ArrowLeft, Download, Play, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Clipboard, Download, Play, RefreshCw, Sparkles } from "lucide-react";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
 import { formatStep, formatWorkerLastSeen, isWorkerConnected } from "@/lib/worker-health";
 import type { Clip, ClipIdea, ProcessingJob, StreamVideo, StreamVideoDetail, WorkerHeartbeat } from "@/lib/types";
@@ -28,6 +28,7 @@ type MomentProductionUpdate = {
   final_hook?: string;
   final_caption?: string;
   edit_note?: string;
+  visual_notes?: string;
 };
 
 const productionStatusOptions: Array<{ label: string; value: MomentProductionStatus }> = [
@@ -421,8 +422,18 @@ function MomentCard({
     await saveProductionUpdate({
       final_hook: String(formData.get("final_hook") ?? ""),
       final_caption: String(formData.get("final_caption") ?? ""),
-      edit_note: String(formData.get("edit_note") ?? "")
+      edit_note: String(formData.get("edit_note") ?? ""),
+      visual_notes: String(formData.get("visual_notes") ?? "")
     });
+  }
+
+  async function handleCopy(value: string) {
+    try {
+      await copyToClipboard(value);
+      setProductionError(null);
+    } catch (caught) {
+      setProductionError(caught instanceof Error ? caught.message : "Could not copy text.");
+    }
   }
 
   return (
@@ -460,13 +471,25 @@ function MomentCard({
         </label>
       </div>
 
-      <div className="mt-5 grid gap-3">
+      <div className="mt-5 grid gap-3 rounded-md border border-white/10 bg-black/20 p-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Edit Pack</p>
+            <h4 className="mt-1 text-base font-semibold text-white">Clip prep</h4>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <CopyButton label="Copy Hook" onClick={() => void handleCopy(draftProduction.final_hook)} />
+            <CopyButton label="Copy Caption" onClick={() => void handleCopy(draftProduction.final_caption)} />
+            <CopyButton label="Copy Edit Notes" onClick={() => void handleCopy(buildEditNotesCopy(idea, scores, draftProduction))} />
+          </div>
+        </div>
         <MomentV2ScoreStrip idea={idea} />
         <LabeledText label="Why it works">{idea.reason}</LabeledText>
+        <LabeledText label="Source quote">{scores.source_quote || "No source quote saved."}</LabeledText>
         <LabeledText label="Hook">{idea.hook}</LabeledText>
         <LabeledText label="Caption">{idea.caption}</LabeledText>
-        {scores.recut_suggestion ? <p className="-mt-1 text-xs leading-5 text-slate-400">{scores.recut_suggestion}</p> : null}
-        {scores.source_quote ? <p className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-slate-400">Source quote: {scores.source_quote}</p> : null}
+        <LabeledText label="Recut suggestion">{scores.recut_suggestion || "No recut suggestion."}</LabeledText>
+        <LabeledText label="Edit difficulty">{scores.edit_difficulty}/100</LabeledText>
       </div>
 
       <form className="mt-5 grid gap-3 rounded-md border border-white/10 bg-black/20 p-3" onSubmit={handleProductionSubmit}>
@@ -502,6 +525,17 @@ function MomentCard({
             className="min-h-20 rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm leading-5 text-slate-100 outline-none focus:border-emerald-300/50"
           />
         </label>
+        <label className="grid gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-300">Visual notes</span>
+          <textarea
+            name="visual_notes"
+            rows={4}
+            value={draftProduction.visual_notes}
+            onChange={(event) => setDraftProduction((current) => ({ ...current, visual_notes: event.currentTarget.value }))}
+            className="min-h-28 rounded-md border border-white/10 bg-slate-950/60 px-3 py-2 text-sm leading-5 text-slate-100 outline-none focus:border-emerald-300/50"
+          />
+          <span className="text-xs leading-5 text-slate-500">AI-generated visual ideas for CapCut/Premiere.</span>
+        </label>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="submit"
@@ -534,6 +568,19 @@ function MomentCard({
         {exportStatus.label ? <p className={clsx("text-sm", exportStatus.tone === "error" ? "text-rose-200" : "text-slate-400")}>{exportStatus.label}</p> : null}
       </div>
     </Card>
+  );
+}
+
+function CopyButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-300/30 hover:bg-emerald-300/10 hover:text-emerald-100"
+    >
+      <Clipboard className="h-3.5 w-3.5" />
+      {label}
+    </button>
   );
 }
 
@@ -606,6 +653,7 @@ function momentV2Scores(idea: ClipIdea) {
 }
 
 function momentProduction(idea: ClipIdea) {
+  const scores = momentV2Scores(idea);
   const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
   const production: Record<string, unknown> = isRecord(rawScores.production) ? rawScores.production : {};
   const finalHook = production.final_hook || idea.hook;
@@ -614,8 +662,37 @@ function momentProduction(idea: ClipIdea) {
     status: productionStatusFromRaw(production.status),
     final_hook: typeof finalHook === "string" ? finalHook : "",
     final_caption: typeof finalCaption === "string" ? finalCaption : "",
-    edit_note: typeof production.edit_note === "string" ? production.edit_note : ""
+    edit_note: typeof production.edit_note === "string" ? production.edit_note : "",
+    visual_notes: typeof production.visual_notes === "string" ? production.visual_notes : defaultVisualNotes(idea, scores)
   };
+}
+
+function defaultVisualNotes(idea: ClipIdea, scores: ReturnType<typeof momentV2Scores>) {
+  const quote = scores.source_quote || idea.hook || idea.caption;
+  const shortQuote = quote.replace(/\s+/g, " ").trim().slice(0, 140);
+  return [
+    `- artist face image or album cover that matches: "${shortQuote}"`,
+    "- tweet/headline screenshot for context or controversy",
+    "- quote card with the strongest line as big kinetic text",
+    "- zoom on reaction, pause, or beat drop at the payoff"
+  ].join("\n");
+}
+
+function buildEditNotesCopy(idea: ClipIdea, scores: ReturnType<typeof momentV2Scores>, production: ReturnType<typeof momentProduction>) {
+  return [
+    `Moment: ${idea.title}`,
+    `Source quote: ${scores.source_quote || "No source quote saved."}`,
+    `Recut suggestion: ${scores.recut_suggestion || "No recut suggestion."}`,
+    `Edit difficulty: ${scores.edit_difficulty}/100`,
+    production.edit_note ? `Edit note: ${production.edit_note}` : "",
+    `Visual notes:\n${production.visual_notes}`
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function copyToClipboard(value: string) {
+  await navigator.clipboard.writeText(value);
 }
 
 function scoreFromRaw(value: unknown, fallback: number) {

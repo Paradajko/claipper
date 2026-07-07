@@ -41,6 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     final_hook: textFieldFromRaw(body.final_hook, textFieldFromRaw(currentProduction.final_hook, String(idea.hook ?? ""))),
     final_caption: textFieldFromRaw(body.final_caption, textFieldFromRaw(currentProduction.final_caption, String(idea.caption ?? ""))),
     edit_note: textFieldFromRaw(body.edit_note, textFieldFromRaw(currentProduction.edit_note, "")),
+    visual_notes: textFieldFromRaw(body.visual_notes, textFieldFromRaw(currentProduction.visual_notes, "")),
     updated_at: new Date().toISOString()
   };
   const raw_data = {
