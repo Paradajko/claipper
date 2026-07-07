@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -183,14 +183,15 @@ async function processPlatformImport(job) {
 
 async function processAnalyzeVideo(job) {
   const video = await loadVideo(job.video_id);
-  if (!video.storage_bucket || !video.storage_path) throw new Error("Video is missing Supabase Storage source path.");
+  const sourceStoragePath = getVideoSourceStoragePath(video);
+  if (!sourceStoragePath) throw new Error("Video is missing source storage path.");
 
   const workDir = await makeWorkDir(job.video_id);
-  const sourcePath = path.join(workDir, `source${path.extname(video.storage_path) || ".mp4"}`);
+  const sourcePath = path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
   const audioPath = path.join(workDir, "audio.mp3");
 
   await updateJob(job.id, "running", "downloading_source", 15);
-  await downloadFile(video.storage_bucket, video.storage_path, sourcePath);
+  await downloadSourceVideo(video, sourcePath);
 
   await updateJob(job.id, "running", "extracting_audio", 35);
   await updateVideo(video.id, "extracting_audio", 35, "Extracting audio with FFmpeg.");
@@ -255,18 +256,19 @@ async function processRenderClip(job, { ready }) {
   const { data: clip, error: clipError } = await supabase.from("clips").select("*").eq("id", job.clip_id).single();
   if (clipError || !clip) throw new Error(clipError?.message ?? "Clip not found.");
   const video = await loadVideo(clip.video_id);
-  if (!video.storage_bucket || !video.storage_path) throw new Error("Video is missing Supabase Storage source path.");
+  const sourceStoragePath = getVideoSourceStoragePath(video);
+  if (!sourceStoragePath) throw new Error("Video is missing source storage path.");
   const renderClip = ready ? await refineReadyClipTiming(video.id, clip) : clip;
 
   const workDir = await makeWorkDir(video.id);
-  const sourcePath = path.join(workDir, `source${path.extname(video.storage_path) || ".mp4"}`);
+  const sourcePath = path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
   const outputPath = path.join(workDir, `${renderClip.id}.mp4`);
   const duration = Math.max(1, Number(renderClip.end_seconds ?? 0) - Number(renderClip.start_seconds ?? 0));
   const renderLabel = ready ? "ready clip" : "draft";
 
   await updateJob(job.id, "running", "downloading_source", 20);
   await supabase.from("clips").update({ render_status: "running" }).eq("id", renderClip.id);
-  await downloadFile(video.storage_bucket, video.storage_path, sourcePath);
+  await downloadSourceVideo(video, sourcePath);
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
@@ -693,11 +695,130 @@ async function makeWorkDir(id) {
   return dir;
 }
 
+async function downloadSourceVideo(video, outputPath) {
+  const provider = getVideoSourceStorageProvider(video);
+  const storagePath = getVideoSourceStoragePath(video);
+  if (!storagePath) throw new Error("Video is missing source storage path.");
+
+  if (provider === "r2") {
+    if (!isR2Configured()) throw new Error("Video source is stored in R2, but R2 worker environment variables are missing.");
+    await downloadR2File(storagePath, outputPath);
+    return;
+  }
+
+  if (!video.storage_bucket || !video.storage_path) throw new Error("Video is missing Supabase Storage source path.");
+  await downloadFile(video.storage_bucket, video.storage_path, outputPath);
+}
+
+function getVideoSourceStorageProvider(video) {
+  if (video.source_storage_provider === "r2" || video.source_storage_provider === "supabase") {
+    return video.source_storage_provider;
+  }
+  if (video.raw_data?.source_storage_provider === "r2" || video.raw_data?.source_storage_provider === "supabase") {
+    return video.raw_data.source_storage_provider;
+  }
+  return "supabase";
+}
+
+function getVideoSourceStoragePath(video) {
+  if (typeof video.source_storage_path === "string" && video.source_storage_path.length > 0) return video.source_storage_path;
+  if (typeof video.raw_data?.source_storage_path === "string" && video.raw_data.source_storage_path.length > 0) return video.raw_data.source_storage_path;
+  return video.storage_path;
+}
+
 async function downloadFile(bucket, storagePath, outputPath) {
   const { data, error } = await supabase.storage.from(bucket).download(storagePath);
   if (error || !data) throw new Error(error?.message ?? "Storage download failed.");
   const bytes = Buffer.from(await data.arrayBuffer());
   await writeFile(outputPath, bytes);
+}
+
+async function downloadR2File(storagePath, outputPath) {
+  const { signedUrl } = createR2PresignedUrl({ method: "GET", key: storagePath, expiresIn: 3600 });
+  const response = await fetch(signedUrl);
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(`R2 download failed (${response.status}): ${details.slice(0, 240) || response.statusText}`);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  await writeFile(outputPath, bytes);
+}
+
+function isR2Configured() {
+  return Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
+}
+
+function createR2PresignedUrl({ contentType, expiresIn = 3600, key, method }) {
+  const accountId = requiredEnv("R2_ACCOUNT_ID");
+  const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");
+  const secretAccessKey = requiredEnv("R2_SECRET_ACCESS_KEY");
+  const bucket = requiredEnv("R2_BUCKET_NAME");
+  const host = `${accountId}.r2.cloudflarestorage.com`;
+  const now = new Date();
+  const amzDate = toAmzDate(now);
+  const dateStamp = amzDate.slice(0, 8);
+  const credentialScope = `${dateStamp}/auto/s3/aws4_request`;
+  const signedHeaders = method === "PUT" && contentType ? "content-type;host" : "host";
+  const canonicalUri = `/${uriEncode(bucket)}/${key.split("/").map(uriEncode).join("/")}`;
+  const query = {
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
+    "X-Amz-Credential": `${accessKeyId}/${credentialScope}`,
+    "X-Amz-Date": amzDate,
+    "X-Amz-Expires": String(Math.max(1, Math.min(604800, expiresIn))),
+    "X-Amz-SignedHeaders": signedHeaders
+  };
+  const canonicalQuery = canonicalQueryString(query);
+  const canonicalHeaders = method === "PUT" && contentType ? `content-type:${contentType}\nhost:${host}\n` : `host:${host}\n`;
+  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256Hex(canonicalRequest)].join("\n");
+  const signingKey = getSignatureKey(secretAccessKey, dateStamp, "auto", "s3");
+  const signature = hmacHex(signingKey, stringToSign);
+
+  return {
+    signedUrl: `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`,
+    headers: method === "PUT" && contentType ? { "Content-Type": contentType } : {}
+  };
+}
+
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required for R2 storage.`);
+  return value;
+}
+
+function toAmzDate(date) {
+  return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
+}
+
+function canonicalQueryString(query) {
+  return Object.entries(query)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`)
+    .join("&");
+}
+
+function uriEncode(value) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function hmac(key, value) {
+  return createHmac("sha256", key).update(value).digest();
+}
+
+function hmacHex(key, value) {
+  return createHmac("sha256", key).update(value).digest("hex");
+}
+
+function getSignatureKey(secretAccessKey, dateStamp, region, service) {
+  const dateKey = hmac(`AWS4${secretAccessKey}`, dateStamp);
+  const regionKey = hmac(dateKey, region);
+  const serviceKey = hmac(regionKey, service);
+  return hmac(serviceKey, "aws4_request");
 }
 
 async function uploadFile(bucket, storagePath, inputPath, contentType) {

@@ -8,7 +8,9 @@ export const runtime = "nodejs";
 const requestSchema = z.object({
   videoId: z.string().uuid(),
   bucket: z.string().min(1),
-  storagePath: z.string().min(1)
+  storagePath: z.string().min(1),
+  sourceStorageProvider: z.enum(["r2", "supabase"]).optional(),
+  sourceStoragePath: z.string().min(1).optional()
 });
 
 export async function POST(request: Request) {
@@ -22,14 +24,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase is required for upload completion." }, { status: 503 });
   }
 
-  const { videoId, bucket, storagePath } = parsed.data;
+  const { videoId, bucket, storagePath, sourceStorageProvider, sourceStoragePath } = parsed.data;
   const { data: video, error: loadError } = await supabase
     .from("videos")
-    .select("id, storage_bucket, storage_path")
+    .select("*")
     .eq("id", videoId)
     .single();
 
-  if (loadError || !video || video.storage_bucket !== bucket || video.storage_path !== storagePath) {
+  const rawData = isRecord(video?.raw_data) ? video.raw_data : {};
+  const savedProvider = typeof video?.source_storage_provider === "string"
+    ? video.source_storage_provider
+    : typeof rawData.source_storage_provider === "string"
+      ? rawData.source_storage_provider
+      : "supabase";
+  const savedPath = typeof video?.source_storage_path === "string"
+    ? video.source_storage_path
+    : typeof rawData.source_storage_path === "string"
+      ? rawData.source_storage_path
+      : video?.storage_path;
+
+  if (
+    loadError ||
+    !video ||
+    video.storage_bucket !== bucket ||
+    video.storage_path !== storagePath ||
+    (sourceStorageProvider && savedProvider !== sourceStorageProvider) ||
+    (sourceStoragePath && savedPath !== sourceStoragePath)
+  ) {
     return NextResponse.json({ error: "Upload completion did not match the created upload session." }, { status: 400 });
   }
 
@@ -65,4 +86,8 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, videoId, href: `/app/content-lab/${videoId}` });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

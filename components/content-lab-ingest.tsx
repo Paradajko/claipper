@@ -8,8 +8,12 @@ type UploadSession = {
   videoId: string;
   bucket: string;
   storagePath: string;
-  token: string;
+  sourceStorageProvider?: "r2" | "supabase";
+  sourceStoragePath?: string;
+  token: string | null;
   signedUrl: string;
+  uploadMethod?: "r2_put" | "supabase_signed";
+  headers?: Record<string, string>;
 };
 
 const maxSizeMb = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 1000);
@@ -65,7 +69,13 @@ export function ContentLabIngest() {
       const completeResponse = await fetch("/api/stream-scan/upload-complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId: session.videoId, bucket: session.bucket, storagePath: session.storagePath })
+        body: JSON.stringify({
+          videoId: session.videoId,
+          bucket: session.bucket,
+          storagePath: session.storagePath,
+          sourceStorageProvider: session.sourceStorageProvider,
+          sourceStoragePath: session.sourceStoragePath
+        })
       });
       const completePayload = await completeResponse.json();
       if (!completeResponse.ok) throw new Error(completePayload.error ?? "Upload finished, but processing could not be queued.");
@@ -209,6 +219,11 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 async function uploadWithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
+  if (session.uploadMethod === "r2_put") {
+    await uploadToR2WithProgress(session, file, onProgress);
+    return;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -217,6 +232,9 @@ async function uploadWithProgress(session: UploadSession, file: File, onProgress
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  if (!session.token) {
+    throw new Error("Supabase upload token is missing.");
+  }
   let stagedProgress = 15;
   const stagedTimer = window.setInterval(() => {
     stagedProgress = Math.min(88, stagedProgress + 7);
@@ -232,6 +250,35 @@ async function uploadWithProgress(session: UploadSession, file: File, onProgress
   } finally {
     window.clearInterval(stagedTimer);
   }
+}
+
+async function uploadToR2WithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
+  await new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", session.signedUrl);
+    for (const [key, value] of Object.entries(session.headers ?? {})) {
+      request.setRequestHeader(key, value);
+    }
+    if (!session.headers?.["Content-Type"]) {
+      request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    }
+
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(15 + Math.round((event.loaded / event.total) * 77));
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress(92);
+        resolve();
+      } else {
+        reject(new Error(`Upload to R2 failed with status ${request.status}.`));
+      }
+    };
+    request.onerror = () => reject(new Error("Upload to R2 failed. Check the R2 bucket CORS settings and try again."));
+    request.send(file);
+  });
 }
 
 function cleanStorageUploadError(message: string) {

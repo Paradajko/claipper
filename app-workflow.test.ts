@@ -294,6 +294,42 @@ describe("AI-first app workflow naming", () => {
     expect(envExample).toContain("NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=1000");
   });
 
+  it("supports direct original video uploads to Cloudflare R2 with Supabase fallback", () => {
+    const uploadSessionRoute = read("app/api/stream-scan/upload-session/route.ts");
+    const uploadCompleteRoute = read("app/api/stream-scan/upload-complete/route.ts");
+    const ingest = read("components/content-lab-ingest.tsx");
+    const worker = read("workers/stream-scan-worker.mjs");
+    const migration = read("supabase/migrations/006_r2_original_video_storage.sql");
+    const envExample = read(".env.example");
+
+    for (const envName of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"]) {
+      expect(envExample).toContain(envName);
+    }
+
+    expect(uploadSessionRoute).toContain("isR2Configured()");
+    expect(uploadSessionRoute).toContain("createR2PresignedUrl");
+    expect(uploadSessionRoute).toContain('source_storage_provider: storageProvider');
+    expect(uploadSessionRoute).toContain('source_storage_path: storagePath');
+    expect(uploadSessionRoute).toContain('uploadMethod: useR2 ? "r2_put" : "supabase_signed"');
+    expect(uploadSessionRoute).toContain("createSupabaseSignedUploadUrl");
+    expect(uploadSessionRoute).toContain("fallbackPayload");
+    expect(uploadCompleteRoute).toContain("sourceStorageProvider");
+    expect(uploadCompleteRoute).toContain("sourceStoragePath");
+    expect(uploadCompleteRoute).toContain("rawData.source_storage_provider");
+    expect(ingest).toContain('uploadMethod?: "r2_put" | "supabase_signed"');
+    expect(ingest).toContain('session.uploadMethod === "r2_put"');
+    expect(ingest).toContain('request.open("PUT", session.signedUrl)');
+    expect(ingest).toContain("uploadToSignedUrl");
+    expect(worker).toContain("downloadSourceVideo(video, sourcePath)");
+    expect(worker).toContain('provider === "r2"');
+    expect(worker).toContain("downloadR2File");
+    expect(worker).toContain("getVideoSourceStoragePath");
+    expect(worker).toContain("video.raw_data?.source_storage_path");
+    expect(worker).toContain("downloadFile(video.storage_bucket, video.storage_path, outputPath)");
+    expect(migration).toContain("add column if not exists source_storage_provider");
+    expect(migration).toContain("add column if not exists source_storage_path");
+  });
+
   it("provides an explicit development-only stream scan reset script", () => {
     const packageJson = read("package.json");
     const resetScript = read("scripts/dev-reset-stream-scan.mjs");
