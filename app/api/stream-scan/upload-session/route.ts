@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { buildR2ObjectKey, createR2PresignedUrl, isR2Configured, r2BucketName } from "@/lib/r2";
+import {
+  buildOriginalVideoObjectKey,
+  configuredObjectStorageBucket,
+  configuredObjectStorageProvider,
+  createUploadUrl,
+  isObjectStorageConfigured
+} from "@/lib/object-storage";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isSupportedVideoFile, maxUploadSizeBytes, safeStorageExtension, storageBuckets, streamScanFlags } from "@/lib/stream-scan-config";
 
@@ -40,14 +46,14 @@ export async function POST(request: Request) {
 
   const videoId = randomUUID();
   const extension = safeStorageExtension(filename);
-  const useR2 = isR2Configured();
-  const storageProvider = useR2 ? "r2" : "supabase";
-  const storagePath = useR2 ? buildR2ObjectKey(videoId, extension) : `default/${videoId}/source.${extension}`;
-  const bucket = useR2 ? r2BucketName() : storageBuckets.originals;
+  const useObjectStorage = isObjectStorageConfigured();
+  const storageProvider = useObjectStorage ? configuredObjectStorageProvider() : "supabase";
+  const storagePath = useObjectStorage ? buildOriginalVideoObjectKey(videoId, extension) : `default/${videoId}/source.${extension}`;
+  const bucket = useObjectStorage ? configuredObjectStorageBucket() : storageBuckets.originals;
   let signedUpload;
   try {
-    signedUpload = useR2
-      ? { ...createR2PresignedUrl({ method: "PUT", key: storagePath, contentType: mimeType, expiresIn: 3600 }), token: null }
+    signedUpload = useObjectStorage
+      ? createUploadUrl({ key: storagePath, contentType: mimeType, expiresIn: 3600 })
       : await createSupabaseSignedUploadUrl(storagePath);
   } catch (caught) {
     return NextResponse.json({ error: caught instanceof Error ? caught.message : "Could not create a signed upload URL." }, { status: 500 });
@@ -90,7 +96,7 @@ export async function POST(request: Request) {
     sourceStoragePath: storagePath,
     token: signedUpload.token,
     signedUrl: signedUpload.signedUrl,
-    uploadMethod: useR2 ? "r2_put" : "supabase_signed",
+    uploadMethod: signedUpload.uploadMethod,
     headers: signedUpload.headers ?? {}
   });
 }
@@ -105,7 +111,7 @@ async function createSupabaseSignedUploadUrl(storagePath: string) {
   if (error || !data) {
     throw new Error("Could not create a signed upload URL.");
   }
-  return { ...data, headers: {} };
+  return { ...data, headers: {}, uploadMethod: "supabase_signed" as const };
 }
 
 async function insertVideoSession(payload: Record<string, unknown>) {

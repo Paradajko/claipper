@@ -3,9 +3,10 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
 import {
   assertValidWorkerEnv,
   checkBinaryAvailability,
@@ -700,9 +701,8 @@ async function downloadSourceVideo(video, outputPath) {
   const storagePath = getVideoSourceStoragePath(video);
   if (!storagePath) throw new Error("Video is missing source storage path.");
 
-  if (provider === "r2") {
-    if (!isR2Configured()) throw new Error("Video source is stored in R2, but R2 worker environment variables are missing.");
-    await downloadR2File(storagePath, outputPath);
+  if (provider !== "supabase") {
+    await downloadOriginalVideo({ provider, storagePath, outputPath });
     return;
   }
 
@@ -711,13 +711,7 @@ async function downloadSourceVideo(video, outputPath) {
 }
 
 function getVideoSourceStorageProvider(video) {
-  if (video.source_storage_provider === "r2" || video.source_storage_provider === "supabase") {
-    return video.source_storage_provider;
-  }
-  if (video.raw_data?.source_storage_provider === "r2" || video.raw_data?.source_storage_provider === "supabase") {
-    return video.raw_data.source_storage_provider;
-  }
-  return "supabase";
+  return normalizeOriginalStorageProvider(video.source_storage_provider ?? video.raw_data?.source_storage_provider);
 }
 
 function getVideoSourceStoragePath(video) {
@@ -731,94 +725,6 @@ async function downloadFile(bucket, storagePath, outputPath) {
   if (error || !data) throw new Error(error?.message ?? "Storage download failed.");
   const bytes = Buffer.from(await data.arrayBuffer());
   await writeFile(outputPath, bytes);
-}
-
-async function downloadR2File(storagePath, outputPath) {
-  const { signedUrl } = createR2PresignedUrl({ method: "GET", key: storagePath, expiresIn: 3600 });
-  const response = await fetch(signedUrl);
-  if (!response.ok) {
-    const details = await response.text().catch(() => "");
-    throw new Error(`R2 download failed (${response.status}): ${details.slice(0, 240) || response.statusText}`);
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  await writeFile(outputPath, bytes);
-}
-
-function isR2Configured() {
-  return Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
-}
-
-function createR2PresignedUrl({ contentType, expiresIn = 3600, key, method }) {
-  const accountId = requiredEnv("R2_ACCOUNT_ID");
-  const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");
-  const secretAccessKey = requiredEnv("R2_SECRET_ACCESS_KEY");
-  const bucket = requiredEnv("R2_BUCKET_NAME");
-  const host = `${accountId}.r2.cloudflarestorage.com`;
-  const now = new Date();
-  const amzDate = toAmzDate(now);
-  const dateStamp = amzDate.slice(0, 8);
-  const credentialScope = `${dateStamp}/auto/s3/aws4_request`;
-  const signedHeaders = method === "PUT" && contentType ? "content-type;host" : "host";
-  const canonicalUri = `/${uriEncode(bucket)}/${key.split("/").map(uriEncode).join("/")}`;
-  const query = {
-    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-    "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
-    "X-Amz-Credential": `${accessKeyId}/${credentialScope}`,
-    "X-Amz-Date": amzDate,
-    "X-Amz-Expires": String(Math.max(1, Math.min(604800, expiresIn))),
-    "X-Amz-SignedHeaders": signedHeaders
-  };
-  const canonicalQuery = canonicalQueryString(query);
-  const canonicalHeaders = method === "PUT" && contentType ? `content-type:${contentType}\nhost:${host}\n` : `host:${host}\n`;
-  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256Hex(canonicalRequest)].join("\n");
-  const signingKey = getSignatureKey(secretAccessKey, dateStamp, "auto", "s3");
-  const signature = hmacHex(signingKey, stringToSign);
-
-  return {
-    signedUrl: `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`,
-    headers: method === "PUT" && contentType ? { "Content-Type": contentType } : {}
-  };
-}
-
-function requiredEnv(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required for R2 storage.`);
-  return value;
-}
-
-function toAmzDate(date) {
-  return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
-}
-
-function canonicalQueryString(query) {
-  return Object.entries(query)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`)
-    .join("&");
-}
-
-function uriEncode(value) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-}
-
-function sha256Hex(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function hmac(key, value) {
-  return createHmac("sha256", key).update(value).digest();
-}
-
-function hmacHex(key, value) {
-  return createHmac("sha256", key).update(value).digest("hex");
-}
-
-function getSignatureKey(secretAccessKey, dateStamp, region, service) {
-  const dateKey = hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const regionKey = hmac(dateKey, region);
-  const serviceKey = hmac(regionKey, service);
-  return hmac(serviceKey, "aws4_request");
 }
 
 async function uploadFile(bucket, storagePath, inputPath, contentType) {

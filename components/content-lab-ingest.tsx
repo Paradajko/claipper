@@ -8,11 +8,11 @@ type UploadSession = {
   videoId: string;
   bucket: string;
   storagePath: string;
-  sourceStorageProvider?: "r2" | "supabase";
+  sourceStorageProvider?: "r2" | "s3" | "supabase";
   sourceStoragePath?: string;
   token: string | null;
   signedUrl: string;
-  uploadMethod?: "r2_put" | "supabase_signed";
+  uploadMethod?: "object_storage_put" | "supabase_signed";
   headers?: Record<string, string>;
 };
 
@@ -219,8 +219,8 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 async function uploadWithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
-  if (session.uploadMethod === "r2_put") {
-    await uploadToR2WithProgress(session, file, onProgress);
+  if (session.uploadMethod === "object_storage_put") {
+    await uploadToObjectStorageWithProgress(session, file, onProgress);
     return;
   }
 
@@ -252,7 +252,7 @@ async function uploadWithProgress(session: UploadSession, file: File, onProgress
   }
 }
 
-async function uploadToR2WithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
+async function uploadToObjectStorageWithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
   await new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", session.signedUrl);
@@ -273,10 +273,10 @@ async function uploadToR2WithProgress(session: UploadSession, file: File, onProg
         onProgress(92);
         resolve();
       } else {
-        reject(new Error(`Upload to R2 failed with status ${request.status}.`));
+        reject(new Error(`Upload to object storage failed with status ${request.status}.`));
       }
     };
-    request.onerror = () => reject(new Error("Upload to R2 failed. Check the R2 bucket CORS settings and try again."));
+    request.onerror = () => reject(new Error("Upload to object storage failed. Check the bucket CORS settings and try again."));
     request.send(file);
   });
 }

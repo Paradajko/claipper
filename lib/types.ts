@@ -108,7 +108,7 @@ export type StreamVideo = {
   source_url?: string | null;
   storage_bucket?: string | null;
   storage_path?: string | null;
-  source_storage_provider?: "r2" | "supabase" | null;
+  source_storage_provider?: "r2" | "s3" | "supabase" | null;
   source_storage_path?: string | null;
   audio_path: string | null;
   status: StreamVideoStatus;

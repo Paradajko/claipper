@@ -9,7 +9,7 @@ const requestSchema = z.object({
   videoId: z.string().uuid(),
   bucket: z.string().min(1),
   storagePath: z.string().min(1),
-  sourceStorageProvider: z.enum(["r2", "supabase"]).optional(),
+  sourceStorageProvider: z.enum(["r2", "s3", "supabase"]).optional(),
   sourceStoragePath: z.string().min(1).optional()
 });
 

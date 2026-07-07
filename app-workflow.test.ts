@@ -294,35 +294,58 @@ describe("AI-first app workflow naming", () => {
     expect(envExample).toContain("NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=1000");
   });
 
-  it("supports direct original video uploads to Cloudflare R2 with Supabase fallback", () => {
+  it("supports provider-agnostic original video uploads with R2, S3 and Supabase fallback", () => {
     const uploadSessionRoute = read("app/api/stream-scan/upload-session/route.ts");
     const uploadCompleteRoute = read("app/api/stream-scan/upload-complete/route.ts");
     const ingest = read("components/content-lab-ingest.tsx");
     const worker = read("workers/stream-scan-worker.mjs");
+    const objectStorage = read("lib/object-storage.ts");
     const migration = read("supabase/migrations/006_r2_original_video_storage.sql");
     const envExample = read(".env.example");
 
-    for (const envName of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"]) {
+    for (const envName of [
+      "OBJECT_STORAGE_PROVIDER",
+      "OBJECT_STORAGE_ENDPOINT",
+      "OBJECT_STORAGE_REGION",
+      "OBJECT_STORAGE_BUCKET",
+      "OBJECT_STORAGE_ACCESS_KEY_ID",
+      "OBJECT_STORAGE_SECRET_ACCESS_KEY"
+    ]) {
       expect(envExample).toContain(envName);
+      expect(objectStorage).toContain(envName);
     }
 
-    expect(uploadSessionRoute).toContain("isR2Configured()");
-    expect(uploadSessionRoute).toContain("createR2PresignedUrl");
+    for (const envName of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"]) {
+      expect(envExample).toContain(envName);
+      expect(objectStorage).toContain(envName);
+    }
+
+    expect(objectStorage).toContain('type OriginalStorageProvider = "r2" | "s3" | "supabase"');
+    expect(objectStorage).toContain("createUploadUrl");
+    expect(objectStorage).toContain("downloadOriginalVideo");
+    expect(objectStorage).toContain("OBJECT_STORAGE_PROVIDER");
+    expect(objectStorage).toContain('value === "r2" || value === "s3"');
+    expect(objectStorage).toContain('provider: "r2"');
+    expect(uploadSessionRoute).toContain("createUploadUrl");
+    expect(uploadSessionRoute).toContain("isObjectStorageConfigured");
     expect(uploadSessionRoute).toContain('source_storage_provider: storageProvider');
     expect(uploadSessionRoute).toContain('source_storage_path: storagePath');
-    expect(uploadSessionRoute).toContain('uploadMethod: useR2 ? "r2_put" : "supabase_signed"');
+    expect(uploadSessionRoute).toContain('uploadMethod: signedUpload.uploadMethod');
     expect(uploadSessionRoute).toContain("createSupabaseSignedUploadUrl");
     expect(uploadSessionRoute).toContain("fallbackPayload");
+    expect(uploadSessionRoute).not.toContain("@/lib/r2");
+    expect(uploadSessionRoute).not.toContain("createR2PresignedUrl");
     expect(uploadCompleteRoute).toContain("sourceStorageProvider");
     expect(uploadCompleteRoute).toContain("sourceStoragePath");
     expect(uploadCompleteRoute).toContain("rawData.source_storage_provider");
-    expect(ingest).toContain('uploadMethod?: "r2_put" | "supabase_signed"');
-    expect(ingest).toContain('session.uploadMethod === "r2_put"');
+    expect(ingest).toContain('uploadMethod?: "object_storage_put" | "supabase_signed"');
+    expect(ingest).toContain('session.uploadMethod === "object_storage_put"');
     expect(ingest).toContain('request.open("PUT", session.signedUrl)');
     expect(ingest).toContain("uploadToSignedUrl");
     expect(worker).toContain("downloadSourceVideo(video, sourcePath)");
-    expect(worker).toContain('provider === "r2"');
-    expect(worker).toContain("downloadR2File");
+    expect(worker).toContain("downloadOriginalVideo");
+    expect(worker).not.toContain("downloadR2File");
+    expect(worker).not.toContain("createR2PresignedUrl");
     expect(worker).toContain("getVideoSourceStoragePath");
     expect(worker).toContain("video.raw_data?.source_storage_path");
     expect(worker).toContain("downloadFile(video.storage_bucket, video.storage_path, outputPath)");
