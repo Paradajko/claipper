@@ -1,5 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export type OriginalStorageProvider = "r2" | "s3" | "supabase";
 
@@ -104,8 +106,8 @@ export async function downloadOriginalVideo({ provider, storagePath, outputPath 
     const details = await response.text().catch(() => "");
     throw new Error(`Object storage download failed (${response.status}): ${details.slice(0, 240) || response.statusText}`);
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  await writeFile(outputPath, bytes);
+  if (!response.body) throw new Error("Object storage download failed: empty response body.");
+  await pipeline(Readable.fromWeb(response.body as unknown as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(outputPath));
 }
 
 function hasGenericObjectStorageEnv(provider: ObjectStorageProvider) {
