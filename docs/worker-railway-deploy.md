@@ -39,6 +39,8 @@ If Railway UI asks for build settings:
 
 ## Required Environment Variables
 
+Before deployment, apply `supabase/migrations/006_r2_original_video_storage.sql`. The migration is idempotent and adds the source provider/path fields used by R2 originals.
+
 Set these on the Railway worker service:
 
 ```bash
@@ -50,24 +52,34 @@ STORAGE_BUCKET_AUDIO=extracted-audio
 STORAGE_BUCKET_CLIPS=rendered-clips
 WORKER_ID=railway-stream-worker-1
 WORKER_POLL_INTERVAL_MS=3000
+OBJECT_STORAGE_PROVIDER=r2
+OBJECT_STORAGE_ENDPOINT=...
+OBJECT_STORAGE_REGION=auto
+OBJECT_STORAGE_BUCKET=...
+OBJECT_STORAGE_ACCESS_KEY_ID=...
+OBJECT_STORAGE_SECRET_ACCESS_KEY=...
 ```
+
+When originals are stored in R2, Railway must receive the same `OBJECT_STORAGE_*` values as Vercel. Keep access keys secret and never expose them to browser code.
 
 Optional:
 
 ```bash
 YTDLP_PATH=yt-dlp
 FFMPEG_PATH=ffmpeg
+FFPROBE_PATH=ffprobe
 WORKER_SECRET=...
 ```
 
 Security rule: `SUPABASE_SERVICE_ROLE_KEY` belongs only on the Railway worker service. Do not expose it to browser code.
 
-## Verify FFmpeg and yt-dlp
+## Verify FFmpeg, FFprobe and yt-dlp
 
 The Dockerfile installs both:
 
 ```bash
 ffmpeg -version
+ffprobe -version
 yt-dlp --version
 ```
 
@@ -75,6 +87,7 @@ The worker startup report also checks both binaries:
 
 ```text
 FFmpeg: available
+FFprobe: available
 yt-dlp: available
 ```
 
@@ -148,7 +161,11 @@ Processing worker is not connected. Uploaded videos will wait in queue.
 
 check Railway logs and env vars.
 
-## Test With a Short MP4
+## User-owned manual video test
+
+No real video was tested by Codex. The user owns visual and end-to-end validation after the technical checks and deployment finish.
+
+### Test With a Short MP4
 
 1. Open `https://claipper.com/app/content-lab`.
 2. Upload a short MP4.
@@ -166,12 +183,17 @@ check Railway logs and env vars.
    - `saving_clip_ideas`
    - `ready`
 6. Confirm clip ideas appear on the video detail page.
+7. Export one Natural clip and one Cold open clip.
+8. Confirm Creator captions remain inside the social safe area.
+9. Toggle Creator Enhance and compare the output.
+10. Change framing and background mode, rerender, and download the final MP4.
 
 ## Production Verification Checklist
 
 - [ ] Railway worker service starts successfully.
 - [ ] Startup report shows required env vars present.
 - [ ] FFmpeg shows `available`.
+- [ ] FFprobe shows `available`.
 - [ ] yt-dlp shows `available`.
 - [ ] Worker heartbeat appears in Content Lab.
 - [ ] Upload a short MP4.
@@ -182,6 +204,8 @@ check Railway logs and env vars.
 - [ ] Job progresses through `ranking_candidates`.
 - [ ] Job reaches `ready`.
 - [ ] Clip ideas appear on the video detail page.
+- [ ] Natural and Cold open exports are visually reviewed by the user.
+- [ ] Creator captions and Creator Enhance are visually reviewed by the user.
 
 ## Common Failures
 

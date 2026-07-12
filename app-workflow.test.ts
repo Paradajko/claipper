@@ -370,6 +370,21 @@ describe("AI-first app workflow naming", () => {
     expect(migration).toContain("add column if not exists source_storage_path");
   });
 
+  it("documents the production worker handoff without claiming a video smoke test", () => {
+    const railwayGuide = read("docs/worker-railway-deploy.md");
+    const workerReadme = read("workers/README.md");
+
+    for (const source of [railwayGuide, workerReadme]) {
+      expect(source).toContain("006_r2_original_video_storage.sql");
+      expect(source).toContain("OBJECT_STORAGE_ENDPOINT");
+      expect(source).toContain("OBJECT_STORAGE_SECRET_ACCESS_KEY");
+      expect(source).toContain("FFPROBE_PATH");
+      expect(source).toContain("No real video was tested by Codex");
+      expect(source).toContain("Cold open");
+      expect(source).toContain("Creator Enhance");
+    }
+  });
+
   it("provides an explicit development-only stream scan reset script", () => {
     const packageJson = read("package.json");
     const resetScript = read("scripts/dev-reset-stream-scan.mjs");
