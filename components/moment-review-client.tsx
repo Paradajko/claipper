@@ -3,8 +3,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ArrowLeft, Clipboard, Download, Play, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Clipboard, Download, RefreshCw, Sparkles } from "lucide-react";
 import { AppShell, Badge, Card, EmptyNotice } from "@/components/ui";
+import { ClipExportForm } from "@/components/clip-export-form";
 import { formatStep, formatWorkerLastSeen, isWorkerConnected } from "@/lib/worker-health";
 import type { Clip, ClipIdea, ProcessingJob, StreamVideo, StreamVideoDetail, WorkerHeartbeat } from "@/lib/types";
 
@@ -487,6 +488,7 @@ function MomentCard({
         <LabeledText label="Why it works">{idea.reason}</LabeledText>
         <LabeledText label="Source quote">{scores.source_quote || "No source quote saved."}</LabeledText>
         <LabeledText label="Hook">{idea.hook}</LabeledText>
+        <LabeledText label="Recommended hook">{formatRecommendedHook(scores)}</LabeledText>
         <LabeledText label="Caption">{idea.caption}</LabeledText>
         <LabeledText label="Recut suggestion">{scores.recut_suggestion || "No recut suggestion."}</LabeledText>
         <LabeledText label="Edit difficulty">{scores.edit_difficulty}/100</LabeledText>
@@ -548,25 +550,7 @@ function MomentCard({
         </div>
       </form>
 
-      <div className="mt-5 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
-        <form action={`/api/stream-scan/clip-ideas/${idea.id}/ready-clip`} method="post" className="flex flex-col gap-3 sm:flex-row sm:items-center" onSubmit={(event) => onExportSubmit(event, idea)}>
-          <label className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm font-medium text-slate-200">
-            <input
-              type="checkbox"
-              name="addCaptions"
-              value="true"
-              disabled={exportStatus.active}
-              className="h-4 w-4 rounded border-white/20 bg-black accent-emerald-400"
-            />
-            Add captions
-          </label>
-          <button disabled={exportStatus.active} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_0_24px_rgba(16,185,129,.25)] hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
-            <Play className="h-4 w-4" />
-            {exportStatus.active ? "Exporting..." : "Export 9:16 Clip"}
-          </button>
-        </form>
-        {exportStatus.label ? <p className={clsx("text-sm", exportStatus.tone === "error" ? "text-rose-200" : "text-slate-400")}>{exportStatus.label}</p> : null}
-      </div>
+      <ClipExportForm idea={idea} exportStatus={exportStatus} onSubmit={(event) => onExportSubmit(event, idea)} />
     </Card>
   );
 }
@@ -636,7 +620,11 @@ function formatCaptionMode(clip: Clip) {
 }
 
 function momentV2Scores(idea: ClipIdea) {
-  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
+  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v3)
+    ? idea.raw_data.moment_v3
+    : isRecord(idea.raw_data?.moment_v2)
+      ? idea.raw_data.moment_v2
+      : {};
   return {
     moment_finder_version: typeof idea.raw_data?.moment_finder_version === "string" ? idea.raw_data.moment_finder_version : null,
     attention_score: scoreFromRaw(rawScores.attention_score, idea.score),
@@ -649,12 +637,26 @@ function momentV2Scores(idea: ClipIdea) {
     recommendation: recommendationFromRaw(rawScores.recommendation),
     recut_suggestion: typeof rawScores.recut_suggestion === "string" ? rawScores.recut_suggestion.trim() : "",
     source_quote: typeof rawScores.source_quote === "string" ? rawScores.source_quote.trim() : ""
+    ,hook_mode: rawScores.hook_mode === "cold_open" ? "cold_open" as const : "natural" as const
+    ,hook_start_seconds: typeof rawScores.hook_start_seconds === "number" ? rawScores.hook_start_seconds : null
+    ,hook_end_seconds: typeof rawScores.hook_end_seconds === "number" ? rawScores.hook_end_seconds : null
   };
+}
+
+function formatRecommendedHook(scores: ReturnType<typeof momentV2Scores>) {
+  if (scores.hook_mode !== "cold_open" || scores.hook_start_seconds == null || scores.hook_end_seconds == null) {
+    return "Natural opening";
+  }
+  return `Cold open ${formatSeconds(scores.hook_start_seconds)}-${formatSeconds(scores.hook_end_seconds)}`;
 }
 
 function momentProduction(idea: ClipIdea) {
   const scores = momentV2Scores(idea);
-  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v2) ? idea.raw_data.moment_v2 : {};
+  const rawScores: Record<string, unknown> = isRecord(idea.raw_data?.moment_v3)
+    ? idea.raw_data.moment_v3
+    : isRecord(idea.raw_data?.moment_v2)
+      ? idea.raw_data.moment_v2
+      : {};
   const production: Record<string, unknown> = isRecord(rawScores.production) ? rawScores.production : {};
   const finalHook = production.final_hook || idea.hook;
   const finalCaption = production.final_caption || idea.caption;

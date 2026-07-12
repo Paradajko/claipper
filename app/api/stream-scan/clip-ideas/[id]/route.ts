@@ -31,8 +31,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const currentRawData = isRecord(idea.raw_data) ? idea.raw_data : {};
-  const currentMomentV2 = isRecord(currentRawData.moment_v2) ? currentRawData.moment_v2 : {};
-  const currentProduction = isRecord(currentMomentV2.production) ? currentMomentV2.production : {};
+  const momentKey = isRecord(currentRawData.moment_v3) ? "moment_v3" : "moment_v2";
+  const currentMoment = isRecord(currentRawData[momentKey]) ? currentRawData[momentKey] : {};
+  const currentProduction = isRecord(currentMoment.production) ? currentMoment.production : {};
   const nextStatus = productionStatusFromRaw(body.status ?? currentProduction.status);
 
   const production = {
@@ -46,8 +47,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   };
   const raw_data = {
     ...currentRawData,
-    moment_v2: {
-      ...currentMomentV2,
+    [momentKey]: {
+      ...currentMoment,
       production
     }
   };

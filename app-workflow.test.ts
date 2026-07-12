@@ -103,16 +103,22 @@ describe("AI-first app workflow naming", () => {
   it("lets users export one clear vertical clip with optional captions", () => {
     const detailPage = read("app/app/content-lab/[id]/page.tsx");
     const reviewClient = read("components/moment-review-client.tsx");
+    const exportForm = read("components/clip-export-form.tsx");
     const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
     const worker = read("workers/stream-scan-worker.mjs");
 
-    expect(reviewClient).toContain("Export 9:16 Clip");
-    expect(reviewClient).toContain("Add captions");
-    expect(reviewClient).toContain("/ready-clip");
-    expect(reviewClient).toContain('name="addCaptions"');
+    expect(reviewClient).toContain("ClipExportForm");
+    expect(exportForm).toContain("Export 9:16 Clip");
+    for (const label of ["Natural", "Cold open", "Start", "End", "Hook start", "Hook end", "Center", "Left", "Right", "Crop", "Blur background", "Creator captions", "Creator Enhance"]) {
+      expect(exportForm).toContain(label);
+    }
+    expect(exportForm).toContain("/ready-clip");
+    for (const field of ["startSeconds", "endSeconds", "hookMode", "hookStartSeconds", "hookEndSeconds", "framingMode", "backgroundMode", "subtitlePreset", "addCaptions", "enhanceEnabled"]) {
+      expect(exportForm).toContain(`name="${field}"`);
+    }
     expect(reviewClient).toContain("formatCaptionMode");
     expect(reviewClient).toContain("optimisticExportIdeaIds");
-    expect(reviewClient).toContain("Exporting...");
+    expect(exportForm).toContain("Exporting...");
     expect(reviewClient).toContain("exportStatus");
     expect(reviewClient).toContain("handleExportSubmit");
     expect(reviewClient).toContain("Download");
@@ -153,7 +159,7 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).toContain("analysisJob");
     expect(reviewClient).toContain("optimisticAnalysis");
     expect(reviewClient).toContain("analysisProgress");
-    expect(reviewClient).toContain("Export 9:16 Clip");
+    expect(read("components/clip-export-form.tsx")).toContain("Export 9:16 Clip");
     expect(reviewClient).toContain("setInterval");
     expect(reviewClient).toContain("2500");
     expect(reviewClient).toContain(`/api/stream-scan/videos/$`);
@@ -171,6 +177,7 @@ describe("AI-first app workflow naming", () => {
     expect(read("app/api/stream-scan/videos/[id]/process/route.ts")).toContain('revalidatePath(`/app/content-lab/${id}`)');
     expect(reviewClient).toContain("Why it works");
     expect(reviewClient).toContain("Hook");
+    expect(reviewClient).toContain("Recommended hook");
     expect(reviewClient).toContain("Caption");
     expect(reviewClient).toContain("moment_finder_version");
     expect(reviewClient).toContain("retention_risk");
@@ -238,9 +245,10 @@ describe("AI-first app workflow naming", () => {
     expect(updateRoute).toContain("export async function PATCH");
     expect(updateRoute).toContain("raw_data");
     expect(updateRoute).toContain("moment_v2");
+    expect(updateRoute).toContain("moment_v3");
     expect(updateRoute).toContain("production");
     expect(updateRoute).toContain("revalidatePath");
-    expect(reviewClient).toContain("Export 9:16 Clip");
+    expect(read("components/clip-export-form.tsx")).toContain("Export 9:16 Clip");
   });
 
   it("logs v3 moment finder candidate counts in the worker", () => {
