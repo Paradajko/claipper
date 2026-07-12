@@ -36,6 +36,7 @@ describe("worker utils", () => {
       supabaseConnected: true,
       openAiPresent: true,
       ffmpeg: { ok: true, binary: "ffmpeg" },
+      ffprobe: { ok: true, binary: "ffprobe" },
       ytdlp: { ok: false, binary: "yt-dlp" },
       buckets: { originals: "original-videos", audio: "extracted-audio", clips: "rendered-clips" },
       pollIntervalMs: 3000,
@@ -46,6 +47,7 @@ describe("worker utils", () => {
     expect(report).toContain("Worker ID: local-worker");
     expect(report).toContain("Supabase: connected");
     expect(report).toContain("FFmpeg: available");
+    expect(report).toContain("FFprobe: available");
     expect(report).toContain("yt-dlp: missing (yt-dlp)");
     expect(report).toContain("Polling every 3000ms");
   });
@@ -61,5 +63,8 @@ describe("worker utils", () => {
   it("separates user-facing worker errors from technical details", () => {
     expect(userFriendlyWorkerError(new Error("spawn ffmpeg ENOENT"))).toBe("Video processing failed. Try another file or format.");
     expect(userFriendlyWorkerError(new Error("yt-dlp login required"))).toBe("Could not import this link. Upload the video file directly.");
+    expect(userFriendlyWorkerError(new Error("Ready clip QA failed: wrong_dimensions"))).toBe(
+      "Rendered clip failed quality checks. Retry the render or review the source."
+    );
   });
 });

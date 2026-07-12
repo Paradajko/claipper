@@ -132,9 +132,9 @@ describe("AI-first app workflow naming", () => {
     expect(readyRoute).toContain('job_type: "render_ready_clip"');
     expect(readyRoute).toContain('type: "ready"');
     expect(readyRoute).toContain("storageBuckets.clips");
-    expect(worker).toContain("shouldAddCaptions");
-    expect(worker).toContain("clip.raw_data?.add_captions === true");
-    expect(worker).toContain("buildReadyClipFilters({ subtitlePath })");
+    expect(worker).toContain("editPlan.add_captions");
+    expect(worker).toContain("loadTranscriptTiming");
+    expect(worker).toContain("buildAssDocument");
   });
 
   it("presents the video detail page as a clean Moment Review workspace with live updates", () => {
@@ -243,10 +243,10 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).toContain("Export 9:16 Clip");
   });
 
-  it("logs v2.1 moment finder candidate counts in the worker", () => {
+  it("logs v3 moment finder candidate counts in the worker", () => {
     const worker = read("workers/stream-scan-worker.mjs");
 
-    expect(worker).toContain('MOMENT_FINDER_VERSION = "v2.1"');
+    expect(worker).toContain('MOMENT_FINDER_VERSION = "v3"');
     expect(worker).toContain("local candidates found");
     expect(worker).toContain("final ranked candidates");
     expect(worker).toContain("moment_finder_version");
@@ -254,33 +254,35 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("overlapping transcript preview");
   });
 
-  it("has the Railway worker render ready clips as faster 720p 9:16 MP4s with hook and subtitle support", () => {
+  it("has the Railway worker render and validate 1080p 9:16 ready clips", () => {
     const worker = read("workers/stream-scan-worker.mjs");
+    const production = read("workers/video-production.mjs");
 
     expect(worker).toContain('job.job_type === "render_ready_clip"');
     expect(worker).toContain("processRenderReadyClip");
-    expect(worker).toContain("720:1280");
-    expect(worker).not.toContain("1080:1920");
-    expect(worker).toContain("\"-hide_banner\"");
-    expect(worker).toContain("\"-loglevel\"");
-    expect(worker).toContain("\"error\"");
+    expect(production).toContain("1080:1920");
+    expect(production).not.toContain("720:1280");
+    expect(production).toContain("\"-hide_banner\"");
+    expect(production).toContain("\"-loglevel\"");
+    expect(production).toContain("\"error\"");
     expect(worker).toContain("add_captions");
     expect(worker).not.toContain("buildHookTextFile");
     expect(worker).not.toContain("textfile='");
     expect(worker).not.toContain("drawtext=text=");
     expect(worker).not.toContain("between(t\\\\,0\\\\,3)");
-    expect(worker).toContain("subtitles=");
-    expect(worker).toContain("loadSubtitleSegments");
+    expect(production).toContain("subtitles=");
+    expect(worker).toContain("loadTranscriptTiming");
     expect(worker).toContain("loadFineTranscriptSegments");
-    expect(worker).toContain("buildSubtitleFile");
-    expect(worker).toContain("MAX_SUBTITLE_WORDS = 3");
-    expect(worker).toContain("buildSubtitleCues");
+    expect(worker).toContain("buildAssDocument");
+    expect(worker).toContain("buildReadyRenderCommand");
+    expect(worker).toContain("validateProbeResult");
     expect(worker).toContain("refineReadyClipTiming");
     expect(worker).toContain("20-60 seconds");
     expect(worker).toContain("avoid irrelevant intro");
     expect(worker).toContain("clear sentence/payoff");
     expect(worker).toContain("segments_json");
-    expect(worker).toContain("MarginV=220");
+    expect(production).toContain(",80,80,260,1");
+    expect(worker).toContain("quality_check");
     expect(worker).toContain("buckets.clips");
     expect(worker).toContain("video/mp4");
   });

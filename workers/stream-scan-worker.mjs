@@ -8,6 +8,13 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
 import {
+  buildAssDocument,
+  buildReadyRenderCommand,
+  buildRenderTimeline,
+  normalizeEditPlan,
+  validateProbeResult
+} from "./video-production.mjs";
+import {
   assertValidWorkerEnv,
   checkBinaryAvailability,
   formatStartupReport,
@@ -30,6 +37,7 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const workerId = process.env.WORKER_ID;
 const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS);
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
+const ffprobeBinary = process.env.FFPROBE_PATH ?? "ffprobe";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
@@ -37,9 +45,6 @@ const MOMENT_FINDER_VERSION = "v3";
 const CLIP_DIFFICULTIES = ["easy", "medium", "hard"];
 const CLIP_TYPES = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"];
 const CLIP_RECOMMENDATIONS = ["export", "needs_recut", "maybe", "skip"];
-const MAX_SUBTITLE_WORDS = 3;
-const MIN_SUBTITLE_SECONDS = 0.6;
-const MAX_SUBTITLE_SECONDS = 1.6;
 const buckets = {
   originals: process.env.STORAGE_BUCKET_ORIGINALS,
   audio: process.env.STORAGE_BUCKET_AUDIO,
@@ -261,13 +266,15 @@ async function processRenderClip(job, { ready }) {
   const video = await loadVideo(clip.video_id);
   const sourceStoragePath = getVideoSourceStoragePath(video);
   if (!sourceStoragePath) throw new Error("Video is missing source storage path.");
-  const renderClip = ready ? await refineReadyClipTiming(video.id, clip) : clip;
+  const hasEditPlan = Boolean(clip.raw_data?.edit_plan);
+  const renderClip = ready && !hasEditPlan ? await refineReadyClipTiming(video.id, clip) : clip;
 
   const workDir = await makeWorkDir(video.id);
   const sourcePath = path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
   const outputPath = path.join(workDir, `${renderClip.id}.mp4`);
   const duration = Math.max(1, Number(renderClip.end_seconds ?? 0) - Number(renderClip.start_seconds ?? 0));
   const renderLabel = ready ? "ready clip" : "draft";
+  let qualityCheck = null;
 
   await updateJob(job.id, "running", "downloading_source", 20);
   await supabase.from("clips").update({ render_status: "running" }).eq("id", renderClip.id);
@@ -275,38 +282,53 @@ async function processRenderClip(job, { ready }) {
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
-    const shouldAddCaptions = clip.raw_data?.add_captions === true || renderClip.raw_data?.add_captions === true || job.raw_data?.add_captions === true;
-    const segments = shouldAddCaptions ? await loadSubtitleSegments(video.id, Number(renderClip.start_seconds ?? 0), Number(renderClip.end_seconds ?? 0)) : [];
-    const subtitlePath = segments.length > 0 ? await buildSubtitleFile(workDir, renderClip, segments) : null;
-    const videoFilters = buildReadyClipFilters({ subtitlePath });
+    const editPlan = normalizeEditPlan(
+      renderClip.raw_data?.edit_plan ?? legacyEditPlan(renderClip, job),
+      { legacy: true }
+    );
+    const timeline = buildRenderTimeline(editPlan);
+    const timing = editPlan.add_captions
+      ? await loadTranscriptTiming(video.id, editPlan.start_seconds, editPlan.end_seconds)
+      : { words: [], segments: [] };
+    const captionItems = timing.words.length > 0 ? timing.words : timing.segments;
+    const assPath = captionItems.length > 0 ? path.join(workDir, `${renderClip.id}.ass`) : null;
+    if (assPath) {
+      const ass = buildAssDocument(captionItems, timeline, { width: 1080, height: 1920, preset: "creator" });
+      await writeFile(assPath, ass, "utf8");
+    }
+    const command = buildReadyRenderCommand({
+      inputPath: sourcePath,
+      outputPath,
+      editPlan,
+      timeline,
+      assPath
+    });
+    await execFileAsync(ffmpegBinary, command.args);
 
-    await execFileAsync(ffmpegBinary, [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-y",
-      "-ss",
-      String(renderClip.start_seconds ?? 0),
-      "-i",
-      sourcePath,
-      "-t",
-      String(duration),
-      "-vf",
-      videoFilters,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-crf",
-      "23",
-      "-c:a",
-      "aac",
-      "-b:a",
-      "128k",
-      "-movflags",
-      "+faststart",
-      outputPath
-    ]);
+    await updateJob(job.id, "running", "validating_ready_clip", 85);
+    let probe;
+    try {
+      const { stdout } = await execFileAsync(ffprobeBinary, [
+        "-v", "error", "-show_streams", "-show_format", "-of", "json", outputPath
+      ]);
+      probe = JSON.parse(stdout);
+    } catch (error) {
+      qualityCheck = {
+        status: "failed",
+        checked_at: new Date().toISOString(),
+        details: { errors: ["ffprobe_error"], technical_error: cleanError(error) }
+      };
+      await saveFailedQualityCheck(renderClip, qualityCheck);
+      throw new Error(`Ready clip QA failed: ffprobe_error: ${cleanError(error)}`);
+    }
+    const validation = validateProbeResult(probe, { width: 1080, height: 1920, duration: command.expectedDuration });
+    const details = summarizeProbeResult(probe, command.expectedDuration, validation.errors);
+    if (!validation.ok) {
+      qualityCheck = { status: "failed", checked_at: new Date().toISOString(), details };
+      await saveFailedQualityCheck(renderClip, qualityCheck);
+      throw new Error(`Ready clip QA failed: ${validation.errors.join(", ")}`);
+    }
+    qualityCheck = { status: "passed", checked_at: new Date().toISOString(), details };
   } else {
     try {
       await execFileAsync(ffmpegBinary, [
@@ -354,7 +376,12 @@ async function processRenderClip(job, { ready }) {
       render_status: "completed",
       status: ready ? "ready" : renderClip.status,
       exported_video_url: null,
-      raw_data: { ...(renderClip.raw_data ?? {}), render_type: ready ? "ready" : "draft", rendered_by: "railway_worker" },
+      raw_data: {
+        ...(renderClip.raw_data ?? {}),
+        render_type: ready ? "ready" : "draft",
+        rendered_by: "railway_worker",
+        ...(ready ? { render_version: 2, quality_check: qualityCheck } : {})
+      },
       updated_at: new Date().toISOString()
     })
     .eq("id", renderClip.id);
@@ -363,6 +390,18 @@ async function processRenderClip(job, { ready }) {
     await supabase.from("clip_ideas").update({ status: ready ? "rendered" : "drafted" }).eq("id", renderClip.clip_idea_id);
   }
   await updateJob(job.id, "completed", `${renderLabel}_completed`, 100);
+}
+
+async function saveFailedQualityCheck(clip, qualityCheck) {
+  await supabase
+    .from("clips")
+    .update({
+      render_status: "failed",
+      status: "editing",
+      raw_data: { ...(clip.raw_data ?? {}), render_version: 2, quality_check: qualityCheck },
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", clip.id);
 }
 
 async function refineReadyClipTiming(videoId, clip) {
@@ -490,16 +529,63 @@ function roundSeconds(value) {
   return Math.round(value * 10) / 10;
 }
 
-async function loadSubtitleSegments(videoId, clipStart, clipEnd) {
-  const fineSegments = await loadFineTranscriptSegments(videoId, clipStart, clipEnd);
-  if (fineSegments.length > 0) return fineSegments;
+function legacyEditPlan(clip, job) {
+  return {
+    start_seconds: Number(clip.start_seconds ?? 0),
+    end_seconds: Number(clip.end_seconds ?? clip.start_seconds ?? 0) + (clip.end_seconds == null ? 1 : 0),
+    hook_mode: "natural",
+    hook_start_seconds: null,
+    hook_end_seconds: null,
+    framing_mode: "center",
+    background_mode: "crop",
+    subtitle_preset: "creator",
+    add_captions: clip.raw_data?.add_captions === true || job.raw_data?.add_captions === true,
+    enhance_enabled: false
+  };
+}
 
-  const broadSegments = await loadTranscriptSegments(videoId, clipStart, clipEnd);
-  return broadSegments.map((segment) => ({
-    start: Number(segment.start_time ?? clipStart),
-    end: Number(segment.end_time ?? clipEnd),
-    text: String(segment.text ?? "")
-  }));
+function summarizeProbeResult(probe, expectedDuration, errors) {
+  const streams = Array.isArray(probe?.streams) ? probe.streams : [];
+  const video = streams.find((stream) => stream.codec_type === "video") ?? null;
+  const audio = streams.find((stream) => stream.codec_type === "audio") ?? null;
+  return {
+    video_codec: video?.codec_name ?? null,
+    audio_codec: audio?.codec_name ?? null,
+    width: video?.width ?? null,
+    height: video?.height ?? null,
+    duration_seconds: Number(probe?.format?.duration ?? 0),
+    expected_duration_seconds: expectedDuration,
+    errors
+  };
+}
+
+async function loadTranscriptTiming(videoId, clipStart, clipEnd) {
+  const { data, error } = await supabase
+    .from("transcripts")
+    .select("segments_json")
+    .eq("video_id", videoId)
+    .eq("status", "ready")
+    .order("created_at", { ascending: false })
+    .limit(3);
+  if (error) throw new Error(error.message);
+
+  const values = (data ?? []).map((transcript) => transcript.segments_json);
+  const parsedSegments = values
+    .flatMap(parseTranscriptJsonSegments)
+    .filter((segment) => segment.end > clipStart && segment.start < clipEnd)
+    .sort((first, second) => first.start - second.start);
+  const segments = parsedSegments.length > 0
+    ? parsedSegments
+    : (await loadTranscriptSegments(videoId, clipStart, clipEnd)).map((segment) => ({
+        start: Number(segment.start_time ?? clipStart),
+        end: Number(segment.end_time ?? clipEnd),
+        text: String(segment.text ?? "")
+      }));
+  const words = values
+    .flatMap(parseTranscriptJsonWords)
+    .filter((word) => word.end > clipStart && word.start < clipEnd)
+    .sort((first, second) => first.start - second.start);
+  return { segments, words };
 }
 
 async function loadFineTranscriptSegments(videoId, clipStart, clipEnd) {
@@ -520,14 +606,25 @@ async function loadFineTranscriptSegments(videoId, clipStart, clipEnd) {
 }
 
 function parseTranscriptJsonSegments(value) {
-  if (!Array.isArray(value)) return [];
-  return value
+  const segments = Array.isArray(value) ? value : value?.segments ?? [];
+  return segments
     .map((segment) => ({
       start: Number(segment?.start ?? segment?.start_time ?? 0),
       end: Number(segment?.end ?? segment?.end_time ?? segment?.start ?? 0),
       text: String(segment?.text ?? "").replace(/\s+/g, " ").trim()
     }))
     .filter((segment) => segment.text && Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start);
+}
+
+function parseTranscriptJsonWords(value) {
+  const words = Array.isArray(value) ? [] : value?.words ?? [];
+  return words
+    .map((word) => ({
+      start: Number(word?.start ?? 0),
+      end: Number(word?.end ?? word?.start ?? 0),
+      text: String(word?.word ?? word?.text ?? "").replace(/\s+/g, " ").trim()
+    }))
+    .filter((word) => word.text && Number.isFinite(word.start) && Number.isFinite(word.end) && word.end > word.start);
 }
 
 async function loadTranscriptSegments(videoId, clipStart, clipEnd) {
@@ -541,86 +638,6 @@ async function loadTranscriptSegments(videoId, clipStart, clipEnd) {
 
   if (error) throw new Error(error.message);
   return data ?? [];
-}
-
-async function buildSubtitleFile(workDir, clip, segments) {
-  const clipStart = Number(clip.start_seconds ?? 0);
-  const clipEnd = Number(clip.end_seconds ?? clipStart + 1);
-  const entries = buildSubtitleCues(segments, clipStart, clipEnd);
-
-  if (entries.length === 0) return null;
-
-  const srt = entries
-    .map((entry, index) => [String(index + 1), `${formatSrtTime(entry.start)} --> ${formatSrtTime(entry.end)}`, entry.text].join("\n"))
-    .join("\n\n");
-  const subtitlePath = path.join(workDir, `${clip.id}.srt`);
-  await writeFile(subtitlePath, `${srt}\n`, "utf8");
-  return subtitlePath;
-}
-
-function buildSubtitleCues(segments, clipStart, clipEnd) {
-  return segments.flatMap((segment) => {
-    const start = Math.max(0, Number(segment.start ?? segment.start_time ?? clipStart) - clipStart);
-    const end = Math.min(clipEnd - clipStart, Number(segment.end ?? segment.end_time ?? clipEnd) - clipStart);
-    const words = subtitleWords(segment.text);
-    if (words.length === 0 || end <= start) return [];
-
-    const maxCueCount = Math.max(1, Math.floor((end - start) / MIN_SUBTITLE_SECONDS));
-    const chunks = chunkSubtitleWords(words).slice(0, maxCueCount);
-    const slotSeconds = (end - start) / chunks.length;
-    return chunks.map((chunk, index) => {
-      const cueStart = start + slotSeconds * index;
-      const nextStart = index < chunks.length - 1 ? start + slotSeconds * (index + 1) : end;
-      const cueEnd = Math.min(nextStart, cueStart + Math.max(MIN_SUBTITLE_SECONDS, Math.min(MAX_SUBTITLE_SECONDS, slotSeconds)));
-      return {
-        start: cueStart,
-        end: Math.max(cueStart + 0.25, cueEnd),
-        text: chunk.join(" ")
-      };
-    });
-  });
-}
-
-function subtitleWords(value) {
-  return String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean);
-}
-
-function chunkSubtitleWords(words) {
-  const chunks = [];
-  for (let index = 0; index < words.length; index += MAX_SUBTITLE_WORDS) {
-    chunks.push(words.slice(index, index + MAX_SUBTITLE_WORDS));
-  }
-  return chunks;
-}
-
-function buildReadyClipFilters({ subtitlePath }) {
-  const filters = [
-    "scale=720:1280:force_original_aspect_ratio=increase",
-    "crop=720:1280"
-  ];
-
-  if (subtitlePath) {
-    filters.push(`subtitles=filename='${escapeFilterQuotedValue(subtitlePath)}':force_style='FontName=Arial,FontSize=13,PrimaryColour=&HFFFFFF,Alignment=2,MarginV=220,Outline=3,Shadow=1'`);
-  }
-
-  return filters.join(",");
-}
-
-function formatSrtTime(seconds) {
-  const milliseconds = Math.max(0, Math.round(seconds * 1000));
-  const hours = Math.floor(milliseconds / 3600000);
-  const minutes = Math.floor((milliseconds % 3600000) / 60000);
-  const wholeSeconds = Math.floor((milliseconds % 60000) / 1000);
-  const ms = milliseconds % 1000;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
-}
-
-function escapeFilterQuotedValue(value) {
-  return String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
 }
 
 async function loadVideo(videoId) {
@@ -1412,8 +1429,9 @@ function sleep(ms) {
 }
 
 async function startupChecks() {
-  const [ffmpeg, ytdlp, supabaseConnected] = await Promise.all([
+  const [ffmpeg, ffprobe, ytdlp, supabaseConnected] = await Promise.all([
     checkBinaryAvailability(ffmpegBinary, ["-version"]),
+    checkBinaryAvailability(ffprobeBinary, ["-version"]),
     checkBinaryAvailability(ytDlpBinary, ["--version"]),
     checkSupabaseConnection()
   ]);
@@ -1424,6 +1442,7 @@ async function startupChecks() {
       supabaseConnected,
       openAiPresent: Boolean(process.env.OPENAI_API_KEY),
       ffmpeg,
+      ffprobe,
       ytdlp,
       buckets,
       pollIntervalMs,
@@ -1434,6 +1453,7 @@ async function startupChecks() {
   const missingRuntime = [];
   if (!supabaseConnected) missingRuntime.push("Supabase connection failed");
   if (!ffmpeg.ok) missingRuntime.push(`FFmpeg unavailable at ${ffmpeg.binary}`);
+  if (!ffprobe.ok) missingRuntime.push(`FFprobe unavailable at ${ffprobe.binary}`);
   if (!ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
   if (missingRuntime.length > 0) {
     throw new Error(`Worker startup checks failed:\n${missingRuntime.join("\n")}`);
@@ -1456,6 +1476,7 @@ async function updateHeartbeat(status, currentJobId, currentStep) {
       current_step: currentStep,
       metadata_json: {
         ffmpeg: ffmpegBinary,
+        ffprobe: ffprobeBinary,
         ytdlp: ytDlpBinary,
         poll_interval_ms: pollIntervalMs,
         environment: process.env.NODE_ENV ?? "development"

@@ -27,6 +27,7 @@ export function formatStartupReport(input: {
   supabaseConnected: boolean;
   openAiPresent: boolean;
   ffmpeg: { ok: boolean; binary: string };
+  ffprobe: { ok: boolean; binary: string };
   ytdlp: { ok: boolean; binary: string };
   buckets: { originals: string; audio: string; clips: string };
   pollIntervalMs: number;

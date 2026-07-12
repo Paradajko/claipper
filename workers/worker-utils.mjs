@@ -64,13 +64,14 @@ export async function checkBinaryAvailability(binary, args = ["-version"]) {
   }
 }
 
-export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ytdlp, buckets, pollIntervalMs, environment }) {
+export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment }) {
   return [
     "Claipper Stream Scan Worker",
     `Worker ID: ${workerId}`,
     `Supabase: ${supabaseConnected ? "connected" : "missing"}`,
     `OpenAI key: ${openAiPresent ? "present" : "missing"}`,
     `FFmpeg: ${ffmpeg.ok ? "available" : `missing (${ffmpeg.binary})`}`,
+    `FFprobe: ${ffprobe.ok ? "available" : `missing (${ffprobe.binary})`}`,
     `yt-dlp: ${ytdlp.ok ? "available" : `missing (${ytdlp.binary})`}`,
     "Buckets:",
     `- ${buckets.originals}`,
@@ -99,6 +100,9 @@ export function formatLastSeen(heartbeat, now = new Date()) {
 
 export function userFriendlyWorkerError(error) {
   const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/quality|\bqa\b|ffprobe|wrong_dimensions|duration_mismatch/i.test(message)) {
+    return "Rendered clip failed quality checks. Retry the render or review the source.";
+  }
   if (/ffmpeg/i.test(message)) return "Video processing failed. Try another file or format.";
   if (/openai|transcrib/i.test(message)) return "Transcription failed. Try another file or check the AI configuration.";
   if (/storage|bucket|download/i.test(message)) return "Video storage failed. Check Supabase Storage configuration.";
