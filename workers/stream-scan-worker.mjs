@@ -33,7 +33,7 @@ const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
-const MOMENT_FINDER_VERSION = "v2.1";
+const MOMENT_FINDER_VERSION = "v3";
 const CLIP_DIFFICULTIES = ["easy", "medium", "hard"];
 const CLIP_TYPES = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"];
 const CLIP_RECOMMENDATIONS = ["export", "needs_recut", "maybe", "skip"];
@@ -213,7 +213,7 @@ async function processAnalyzeVideo(job) {
   await updateJob(job.id, "running", "segmenting", 62);
   await updateVideo(video.id, "segmenting", 62, "Splitting transcript into 5-10 minute chunks.");
   const transcriptItems = toTranscriptItems(transcript);
-  const segments = buildTranscriptSegments(transcriptItems, 600);
+  const segments = buildOverlappingTranscriptSegments(transcriptItems, 600, 120);
   await saveTranscriptSegments(video.id, transcriptId, segments);
 
   await updateJob(job.id, "running", "analyzing_segments", 75);
@@ -229,17 +229,19 @@ async function processAnalyzeVideo(job) {
   const ranked = await rankCandidatesWithAi(candidates);
   const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
   const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
-  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${refined.length}`);
-  for (const [index, moment] of refined.entries()) {
+  const verified = [];
+  for (const candidate of refined) verified.push(await verifyCandidateTiming(candidate, transcriptItems));
+  console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${verified.length}`);
+  for (const [index, moment] of verified.entries()) {
     const overlappingPreview = extractSourceQuote(transcriptItems, moment.start_time, moment.end_time).slice(0, 260);
     console.log(
       `[claipper-worker] final moment ${index + 1}: title="${moment.title}" start_time=${secondsToTimestamp(moment.start_time)} end_time=${secondsToTimestamp(moment.end_time)} source_quote="${moment.source_quote}" overlapping transcript preview="${overlappingPreview}"`
     );
   }
   await updateJob(job.id, "running", "saving_clip_ideas", 95);
-  await saveClipIdeas(video.id, refined);
+  await saveClipIdeas(video.id, verified);
 
-  await updateVideo(video.id, "ready", 100, `Ready with ${refined.length} ranked clip ideas.`);
+  await updateVideo(video.id, "ready", 100, `Ready with ${verified.length} ranked clip ideas.`);
   await updateJob(job.id, "completed", "ready", 100);
 }
 
@@ -742,7 +744,10 @@ async function saveTranscript(videoId, transcript) {
       language: transcript.language ?? null,
       text: transcript.text ?? null,
       full_text: transcript.text ?? null,
-      segments_json: transcript.segments ?? null,
+      segments_json: {
+        segments: transcript.segments ?? [],
+        words: transcript.words ?? []
+      },
       raw_data: transcript
     })
     .select("id")
@@ -782,6 +787,7 @@ async function transcribeAudio(audioPath) {
   form.append("model", process.env.OPENAI_TRANSCRIBE_MODEL ?? "whisper-1");
   form.append("response_format", "verbose_json");
   form.append("timestamp_granularities[]", "segment");
+  form.append("timestamp_granularities[]", "word");
 
   const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -807,7 +813,7 @@ async function analyzeTranscriptSegment(segment) {
       {
         role: "system",
         content:
-          "You are Claipper's Moment Finder v2.1 producer. Return only structured JSON. Find 3-5 scroll-stopping short-form moments from this segment when possible, not summaries. Use the same language as the transcript for title, hook, caption and recut_suggestion. For Slovak/Czech transcripts, write those fields in Slovak/Czech, never English. Prefer emotion, conflict, strong opinion, surprising statements, funny reactions, tension, clear payoff and a scroll-stopping first sentence. Penalize generic gratitude, calm explanations, intros, outros, thank-you sections, nice-but-boring moments and anything that needs too much context."
+          "You are Claipper's Moment Finder v3 producer for Czech and Slovak short-form clips. Return only structured JSON and favor recall: find 3-5 genuine moments per segment when available, not summaries. Never invent a quote. Every hook and timestamp must overlap words present in the supplied transcript. A cold-open interval must be 1-3 seconds and remain inside the candidate interval. Use natural when no self-contained cold open exists. Keep title, hook, caption and recut_suggestion in Czech or Slovak to match the transcript. Prefer emotion, conflict, strong opinion, surprise, funny reactions, tension, a clear payoff and a scroll-stopping first sentence. Penalize generic gratitude, calm explanations, intros, outros and context-heavy moments."
       },
       {
         role: "user",
@@ -815,7 +821,7 @@ async function analyzeTranscriptSegment(segment) {
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
           "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
-          "Return JSON as {\"candidates\":[{\"title\":\"same-language string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"same-language short hook text\",\"caption\":\"same-language social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"same-language specific trim/edit note or empty string\"}]}. Keep each candidate 20-60 seconds. Return 3-5 candidates when the segment has enough material. Use maybe or needs_recut for imperfect but interesting moments; use skip only for truly boring/generic material.",
+          "Return JSON as {\"candidates\":[{\"title\":\"CZ/SK string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"exact grounded CZ/SK hook\",\"caption\":\"CZ/SK social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"CZ/SK note or empty string\",\"source_quote\":\"exact transcript quote\",\"hook_mode\":\"natural|cold_open\",\"hook_start_time\":\"HH:MM:SS or omitted\",\"hook_end_time\":\"HH:MM:SS or omitted\"}]}. Keep each candidate 20-60 seconds.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -837,7 +843,7 @@ async function rankCandidatesWithAi(candidates) {
       {
         role: "system",
         content:
-          "Rank Claipper Moment Finder v2.1 candidates. Return only structured JSON. Keep the strongest 3-8 non-skip moments unless the transcript is extremely short. Do not collapse to one result when multiple maybe or needs_recut moments exist. Keep title, hook, caption and recut_suggestion in the source transcript language; for Slovak/Czech content, never translate those fields to English. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic gratitude, summaries, calm explanations, intros, outros, thank-you sections and nice-but-boring moments."
+          "Rank and deduplicate Claipper Moment Finder v3 candidates. Return only structured JSON. Keep the strongest 5-10 non-skip CZ/SK moments when available. Never invent a quote. Every hook and timestamp must overlap words present in the supplied transcript. A cold-open interval must be 1-3 seconds and remain inside the candidate interval. Use natural when no self-contained cold open exists. Prefer low context_needed, low retention_risk, strong first seconds and a clear payoff."
       },
       {
         role: "user",
@@ -851,6 +857,60 @@ async function rankCandidatesWithAi(candidates) {
   const rankedAi = aiRanked.length > 0 ? rankClipCandidates(aiRanked, 8) : [];
   if (rankedAi.length >= Math.min(3, locallyRanked.length)) return rankedAi;
   return locallyRanked;
+}
+
+async function verifyCandidateTiming(candidate, transcriptItems) {
+  const fallback = { ...candidate, hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  const context = transcriptItems.filter(
+    (item) => item.end > candidate.start_time - 20 && item.start < candidate.end_time + 20
+  );
+  if (context.length === 0) return fallback;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "Verify one CZ/SK short-form moment against transcript timing. Never invent a quote. Return only JSON. Start and end must land on supplied transcript segments, keep the clip 20-60 seconds, and never cut a complete thought. A cold-open must be a self-contained 1-3 second interval inside the clip; otherwise use natural."
+        },
+        {
+          role: "user",
+          content: [
+            `Candidate: ${JSON.stringify(candidate)}`,
+            'Return {"start_seconds":120,"end_seconds":158,"hook_mode":"natural|cold_open","hook_start_seconds":null,"hook_end_seconds":null,"reason":"grounded timing reason"}.',
+            `Transcript context: ${JSON.stringify(context)}`
+          ].join("\n\n")
+        }
+      ],
+      temperature: 0,
+      max_tokens: 300
+    });
+    const value = JSON.parse(completion.choices[0]?.message.content ?? "{}");
+    const start = nearestTranscriptBoundary(Number(value.start_seconds), context.map((item) => item.start));
+    const end = nearestTranscriptBoundary(Number(value.end_seconds), context.map((item) => item.end));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < 20 || end - start > 60) return fallback;
+
+    const hook = normalizeNumericHookBounds(value, start, end);
+    return {
+      ...candidate,
+      start_time: start,
+      end_time: end,
+      source_quote: extractSourceQuote(transcriptItems, start, end) || candidate.source_quote,
+      ...hook
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function nearestTranscriptBoundary(value, boundaries) {
+  if (!Number.isFinite(value) || boundaries.length === 0) return Number.NaN;
+  return boundaries.reduce((nearest, boundary) =>
+    Math.abs(boundary - value) < Math.abs(nearest - value) ? boundary : nearest
+  );
 }
 
 function toTranscriptItems(transcript) {
@@ -868,23 +928,18 @@ function toTranscriptItems(transcript) {
   return text ? [{ start: 0, end: 600, text }] : [];
 }
 
-function buildTranscriptSegments(items, segmentLengthSeconds = 600) {
+function buildOverlappingTranscriptSegments(items, windowSeconds = 600, overlapSeconds = 120) {
   if (items.length === 0) return [];
-  const segments = [];
-  let currentItems = [];
-  let currentStart = Math.floor(items[0].start / segmentLengthSeconds) * segmentLengthSeconds;
-  let currentEnd = currentStart + segmentLengthSeconds;
-
-  for (const item of items) {
-    if (item.start >= currentEnd && currentItems.length > 0) {
-      segments.push(toSegment(segments.length, currentItems));
-      currentItems = [];
-      currentStart = Math.floor(item.start / segmentLengthSeconds) * segmentLengthSeconds;
-      currentEnd = currentStart + segmentLengthSeconds;
-    }
-    currentItems.push(item);
+  if (windowSeconds <= 0 || overlapSeconds < 0 || overlapSeconds >= windowSeconds) {
+    throw new Error("Transcript window must be positive and larger than its overlap.");
   }
-  if (currentItems.length > 0) segments.push(toSegment(segments.length, currentItems));
+  const segments = [];
+  const finalEnd = Math.max(...items.map((item) => item.end));
+  const step = windowSeconds - overlapSeconds;
+  for (let windowStart = 0; windowStart < finalEnd; windowStart += step) {
+    const selected = items.filter((item) => item.end > windowStart && item.start < windowStart + windowSeconds);
+    if (selected.length > 0) segments.push(toSegment(segments.length, selected));
+  }
   return segments;
 }
 
@@ -915,6 +970,7 @@ function normalizeClipCandidate(value) {
   const end = parseTimestampToSeconds(String(value?.end_time ?? ""));
   if (!difficulty || !clipType || end <= start) return null;
   const score = normalizeScore(value.score, 0);
+  const hook = normalizeHookBounds(value, start, end);
   return {
     title: String(value.title ?? "").slice(0, 180) || "Untitled clip idea",
     start_time: start,
@@ -933,18 +989,28 @@ function normalizeClipCandidate(value) {
     retention_risk: normalizeScore(value.retention_risk, 50),
     edit_difficulty: normalizeScore(value.edit_difficulty, 50),
     recommendation: CLIP_RECOMMENDATIONS.includes(value?.recommendation) ? value.recommendation : "maybe",
-    recut_suggestion: String(value.recut_suggestion ?? "").trim()
+    recut_suggestion: String(value.recut_suggestion ?? "").trim(),
+    source_quote: String(value.source_quote ?? "").trim(),
+    ...hook
   };
 }
 
 function rankClipCandidates(candidates, limit = 20) {
-  return [...candidates]
+  const eligible = candidates
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
       return duration >= READY_CLIP_MIN_SECONDS && duration <= READY_CLIP_MAX_SECONDS && candidate.recommendation !== "skip";
-    })
-    .sort((first, second) => v2MomentScore(second) - v2MomentScore(first))
+    });
+  return dedupeClipCandidates(eligible)
     .slice(0, limit);
+}
+
+function dedupeClipCandidates(candidates, threshold = 0.7) {
+  return [...candidates]
+    .sort((first, second) => v3MomentScore(second) - v3MomentScore(first))
+    .filter((candidate, index, ranked) =>
+      ranked.slice(0, index).every((kept) => overlapRatio(candidate, kept) < threshold)
+    );
 }
 
 function clipIdeaInsertPayload(videoId, idea, source) {
@@ -963,7 +1029,7 @@ function clipIdeaInsertPayload(videoId, idea, source) {
     raw_data: {
       source,
       moment_finder_version: MOMENT_FINDER_VERSION,
-      moment_v2: {
+      moment_v3: {
         attention_score: idea.attention_score,
         emotion_spike: idea.emotion_spike,
         hook_strength: idea.hook_strength,
@@ -973,7 +1039,10 @@ function clipIdeaInsertPayload(videoId, idea, source) {
         edit_difficulty: idea.edit_difficulty,
         recommendation: idea.recommendation,
         recut_suggestion: idea.recut_suggestion,
-        source_quote: idea.source_quote
+        source_quote: idea.source_quote,
+        hook_mode: idea.hook_mode ?? "natural",
+        hook_start_seconds: idea.hook_start_time ?? null,
+        hook_end_seconds: idea.hook_end_time ?? null
       }
     }
   };
@@ -1267,7 +1336,7 @@ function normalizeScore(value, fallback) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
 }
 
-function v2MomentScore(candidate) {
+function v3MomentScore(candidate) {
   const signal =
     candidate.attention_score * 0.26 +
     candidate.emotion_spike * 0.18 +
@@ -1277,6 +1346,45 @@ function v2MomentScore(candidate) {
   const penalty = candidate.context_needed * 0.14 + candidate.retention_risk * 0.18 + candidate.edit_difficulty * 0.06;
   const recommendationBoost = candidate.recommendation === "export" ? 8 : candidate.recommendation === "needs_recut" ? -3 : 0;
   return signal - penalty + recommendationBoost;
+}
+
+function overlapRatio(first, second) {
+  const intersection = Math.max(0, Math.min(first.end_time, second.end_time) - Math.max(first.start_time, second.start_time));
+  const shorterDuration = Math.min(first.end_time - first.start_time, second.end_time - second.start_time);
+  return shorterDuration > 0 ? intersection / shorterDuration : 0;
+}
+
+function normalizeHookBounds(value, candidateStart, candidateEnd) {
+  if (value?.hook_mode !== "cold_open") {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+  return normalizeNumericHookBounds(
+    {
+      hook_mode: value.hook_mode,
+      hook_start_seconds: parseTimestampToSeconds(String(value.hook_start_time ?? "")),
+      hook_end_seconds: parseTimestampToSeconds(String(value.hook_end_time ?? ""))
+    },
+    candidateStart,
+    candidateEnd
+  );
+}
+
+function normalizeNumericHookBounds(value, candidateStart, candidateEnd) {
+  const hookStart = Number(value?.hook_start_seconds);
+  const hookEnd = Number(value?.hook_end_seconds);
+  const duration = hookEnd - hookStart;
+  if (
+    value?.hook_mode !== "cold_open" ||
+    !Number.isFinite(hookStart) ||
+    !Number.isFinite(hookEnd) ||
+    hookStart < candidateStart ||
+    hookEnd > candidateEnd ||
+    duration < 1 ||
+    duration > 3
+  ) {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+  return { hook_mode: "cold_open", hook_start_time: hookStart, hook_end_time: hookEnd };
 }
 
 function parseTimestampToSeconds(timestamp) {

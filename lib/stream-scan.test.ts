@@ -132,6 +132,33 @@ describe("stream scan helpers", () => {
     });
   });
 
+  it.each([
+    ["outside the candidate", "00:02:00", "00:02:02"],
+    ["shorter than one second", "00:02:20", "00:02:20"],
+    ["longer than three seconds", "00:02:20", "00:02:24"]
+  ])("downgrades a cold-open hook %s to natural", (_label, hookStart, hookEnd) => {
+    const candidate = normalizeClipCandidate({
+      title: "Invalid cold opener",
+      start_time: "00:02:10",
+      end_time: "00:02:50",
+      score: 90,
+      reason: "Hook bounds need validation.",
+      hook: "This changes everything.",
+      caption: "Watch the turn.",
+      difficulty: "easy",
+      clip_type: "opinion",
+      hook_start_time: hookStart,
+      hook_end_time: hookEnd,
+      hook_mode: "cold_open"
+    });
+
+    expect(candidate).toMatchObject({
+      hook_mode: "natural",
+      hook_start_time: null,
+      hook_end_time: null
+    });
+  });
+
   it("deduplicates heavily overlapping candidates and keeps the stronger one", () => {
     const weaker = normalizeClipCandidate({
       title: "Weaker",

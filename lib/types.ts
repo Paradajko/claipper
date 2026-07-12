@@ -11,6 +11,44 @@ export const clipStatuses = [
 
 export type ClipStatus = (typeof clipStatuses)[number];
 
+export type MomentV3Metadata = {
+  attention_score: number;
+  emotion_spike: number;
+  hook_strength: number;
+  payoff_score: number;
+  context_needed: number;
+  retention_risk: number;
+  edit_difficulty: number;
+  recommendation: "export" | "needs_recut" | "maybe" | "skip";
+  recut_suggestion: string;
+  source_quote: string;
+  hook_mode: "natural" | "cold_open";
+  hook_start_seconds: number | null;
+  hook_end_seconds: number | null;
+};
+
+export type ClipEditPlan = {
+  version: 1;
+  start_seconds: number;
+  end_seconds: number;
+  hook_mode: "natural" | "cold_open";
+  hook_start_seconds: number | null;
+  hook_end_seconds: number | null;
+  framing_mode: "left" | "center" | "right";
+  background_mode: "crop" | "blur";
+  subtitle_preset: "creator";
+  add_captions: boolean;
+  enhance_enabled: boolean;
+};
+
+export type MomentProduction = {
+  edit_plan?: ClipEditPlan;
+  moment_v3?: MomentV3Metadata;
+  render_type?: "draft" | "ready";
+  render_version?: number;
+  quality_check?: Record<string, unknown>;
+};
+
 export type SourceVideo = {
   id: string;
   created_at: string;

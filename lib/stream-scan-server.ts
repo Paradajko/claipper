@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import OpenAI from "openai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  buildTranscriptSegments,
+  buildOverlappingTranscriptSegments,
   clipIdeaInsertPayload,
   groundClipCandidate,
   normalizeClipCandidates,
@@ -34,6 +34,7 @@ type VerboseTranscript = {
     end?: number;
     text?: string;
   }>;
+  words?: Array<{ start?: number; end?: number; word?: string; text?: string }>;
 };
 
 export async function ensureStreamScanFolders() {
@@ -121,7 +122,7 @@ export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: s
     await setVideoStatus(supabase, videoId, "segmenting", "Splitting transcript into reviewable chunks.");
     await updateJob(supabase, jobId, "running", "segmenting");
     const transcriptItems = toTranscriptItems(transcript);
-    const segments = buildTranscriptSegments(transcriptItems, 600);
+    const segments = buildOverlappingTranscriptSegments(transcriptItems, 600, 120);
     await saveTranscriptSegments(supabase, videoId, transcriptId, segments);
 
     await setVideoStatus(supabase, videoId, "analyzing", "Analyzing transcript chunks for clip candidates.");
@@ -136,11 +137,13 @@ export async function runStreamScanPipeline(supabase: SupabaseClient, videoId: s
     const ranked = await rankCandidatesWithAi(candidates);
     const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
     const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
-    await saveClipIdeas(supabase, videoId, refined);
+    const verified = [];
+    for (const candidate of refined) verified.push(await verifyCandidateTiming(candidate, transcriptItems));
+    await saveClipIdeas(supabase, videoId, verified);
 
-    await setVideoStatus(supabase, videoId, "ready", `Ready with ${refined.length} ranked clip ideas.`);
+    await setVideoStatus(supabase, videoId, "ready", `Ready with ${verified.length} ranked clip ideas.`);
     await updateJob(supabase, jobId, "completed", "ready");
-    return { ideas: refined.length };
+    return { ideas: verified.length };
   } catch (pipelineError) {
     const message = pipelineError instanceof Error ? pipelineError.message : "Unknown stream scan failure.";
     await setVideoStatus(supabase, videoId, "failed", "Processing failed.", message);
@@ -250,7 +253,7 @@ async function transcribeAudio(audioPath: string): Promise<VerboseTranscript> {
     file: createReadStream(audioPath),
     model: process.env.OPENAI_TRANSCRIBE_MODEL ?? "whisper-1",
     response_format: "verbose_json",
-    timestamp_granularities: ["segment"]
+    timestamp_granularities: ["segment", "word"]
   });
 
   return response as VerboseTranscript;
@@ -269,7 +272,7 @@ async function analyzeTranscriptSegment(segment: { segment_index: number; start_
       {
         role: "system",
         content:
-          "You are Claipper's Moment Finder v2.1 producer. Return only structured JSON. Find 3-5 scroll-stopping short-form moments from this segment when possible, not summaries. Use the same language as the transcript for title, hook, caption and recut_suggestion. For Slovak/Czech transcripts, write those fields in Slovak/Czech, never English. Prefer emotion, conflict, strong opinion, surprising statements, funny reactions, tension, clear payoff and a scroll-stopping first sentence. Penalize generic gratitude, calm explanations, intros, outros, thank-you sections, nice-but-boring moments and anything that needs too much context."
+          "You are Claipper's Moment Finder v3 producer for Czech and Slovak clips. Return only structured JSON and favor recall. Never invent a quote. Every hook and timestamp must overlap words present in the supplied transcript. A cold-open interval must be 1-3 seconds and remain inside the candidate interval. Use natural when no self-contained cold open exists. Keep all editorial text in Czech or Slovak. Prefer emotion, conflict, strong opinion, surprise, funny reactions, tension and clear payoff; penalize generic intros, outros and context-heavy summaries."
       },
       {
         role: "user",
@@ -277,7 +280,7 @@ async function analyzeTranscriptSegment(segment: { segment_index: number; start_
           `Segment index: ${segment.segment_index}`,
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
           "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
-          "Return JSON as {\"candidates\":[{\"title\":\"same-language string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"same-language short hook text\",\"caption\":\"same-language social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"same-language specific trim/edit note or empty string\"}]}. Return 3-5 candidates when the segment has enough material. Use maybe or needs_recut for imperfect but interesting moments; use skip only for truly boring/generic material.",
+          "Return JSON as {\"candidates\":[{\"title\":\"CZ/SK string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"grounded reason\",\"hook\":\"exact grounded hook\",\"caption\":\"CZ/SK caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"CZ/SK note\",\"source_quote\":\"exact transcript quote\",\"hook_mode\":\"natural|cold_open\",\"hook_start_time\":\"HH:MM:SS or omitted\",\"hook_end_time\":\"HH:MM:SS or omitted\"}]}. Keep candidates 20-60 seconds.",
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -302,7 +305,7 @@ async function rankCandidatesWithAi(candidates: NormalizedClipCandidate[]) {
       {
         role: "system",
         content:
-          "Rank Claipper Moment Finder v2.1 candidates. Return only structured JSON. Keep the strongest 3-8 non-skip moments unless the transcript is extremely short. Do not collapse to one result when multiple maybe or needs_recut moments exist. Keep title, hook, caption and recut_suggestion in the source transcript language; for Slovak/Czech content, never translate those fields to English. Prefer scroll-stopping clips with low context_needed, low retention_risk, strong first seconds and clear payoff. Penalize generic gratitude, summaries, calm explanations, intros, outros, thank-you sections and nice-but-boring moments."
+          "Rank and deduplicate Claipper Moment Finder v3 candidates. Return only structured JSON. Keep the strongest 5-10 non-skip CZ/SK moments when available. Never invent a quote. Every hook and timestamp must overlap supplied transcript words. Cold opens must be 1-3 seconds inside the candidate; otherwise use natural. Prefer low context_needed, low retention_risk, strong first seconds and clear payoff."
       },
       {
         role: "user",
@@ -317,6 +320,76 @@ async function rankCandidatesWithAi(candidates: NormalizedClipCandidate[]) {
   const rankedAi = aiRanked.length > 0 ? rankClipCandidates(aiRanked, 8) : [];
   if (rankedAi.length >= Math.min(3, locallyRanked.length)) return rankedAi;
   return locallyRanked;
+}
+
+async function verifyCandidateTiming(
+  candidate: NormalizedClipCandidate,
+  transcriptItems: TranscriptItem[]
+): Promise<NormalizedClipCandidate> {
+  const fallback: NormalizedClipCandidate = {
+    ...candidate,
+    hook_mode: "natural",
+    hook_start_time: null,
+    hook_end_time: null
+  };
+  if (!process.env.OPENAI_API_KEY) return fallback;
+  const context = transcriptItems.filter(
+    (item) => item.end > candidate.start_time - 20 && item.start < candidate.end_time + 20
+  );
+  if (context.length === 0) return fallback;
+
+  try {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await client.chat.completions.create({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "Verify one CZ/SK short-form moment against transcript timing. Never invent a quote. Return only JSON. Start and end must land on supplied transcript segments and keep the clip 20-60 seconds. A cold-open must be a self-contained 1-3 second interval inside the clip; otherwise use natural."
+        },
+        {
+          role: "user",
+          content: `Candidate: ${JSON.stringify(candidate)}\nReturn {"start_seconds":120,"end_seconds":158,"hook_mode":"natural|cold_open","hook_start_seconds":null,"hook_end_seconds":null,"reason":"grounded reason"}.\nTranscript: ${JSON.stringify(context)}`
+        }
+      ],
+      temperature: 0,
+      max_tokens: 300
+    });
+    const value = JSON.parse(completion.choices[0]?.message.content ?? "{}") as Record<string, unknown>;
+    const start = nearestBoundary(Number(value.start_seconds), context.map((item) => item.start));
+    const end = nearestBoundary(Number(value.end_seconds), context.map((item) => item.end));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < 20 || end - start > 60) return fallback;
+
+    const hookStart = Number(value.hook_start_seconds);
+    const hookEnd = Number(value.hook_end_seconds);
+    const coldOpenValid =
+      value.hook_mode === "cold_open" &&
+      Number.isFinite(hookStart) &&
+      Number.isFinite(hookEnd) &&
+      hookStart >= start &&
+      hookEnd <= end &&
+      hookEnd - hookStart >= 1 &&
+      hookEnd - hookStart <= 3;
+    return {
+      ...candidate,
+      start_time: start,
+      end_time: end,
+      hook_mode: coldOpenValid ? "cold_open" : "natural",
+      hook_start_time: coldOpenValid ? hookStart : null,
+      hook_end_time: coldOpenValid ? hookEnd : null
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function nearestBoundary(value: number, boundaries: number[]) {
+  if (!Number.isFinite(value) || boundaries.length === 0) return Number.NaN;
+  return boundaries.reduce((nearest, boundary) =>
+    Math.abs(boundary - value) < Math.abs(nearest - value) ? boundary : nearest
+  );
 }
 
 function parseCandidatesJson(content: string) {
@@ -353,6 +426,7 @@ async function saveTranscript(supabase: SupabaseClient, videoId: string, transcr
       status: "ready",
       language: transcript.language ?? null,
       text: transcript.text ?? null,
+      segments_json: { segments: transcript.segments ?? [], words: transcript.words ?? [] },
       raw_data: transcript
     })
     .select("id")
