@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOverlappingTranscriptSegments,
   buildTranscriptSegments,
   clipIdeaInsertPayload,
+  dedupeClipCandidates,
   extractSourceQuote,
   groundClipCandidate,
   normalizeClipCandidate,
@@ -50,6 +52,21 @@ describe("stream scan helpers", () => {
     ]);
   });
 
+  it("builds overlapping analysis windows so boundary moments are visible twice", () => {
+    const items = Array.from({ length: 13 }, (_, index) => ({
+      start: index * 60,
+      end: index * 60 + 30,
+      text: `minute-${index}`
+    }));
+
+    const segments = buildOverlappingTranscriptSegments(items, 600, 120);
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({ start_time: 0, end_time: 570 });
+    expect(segments[1].start_time).toBe(480);
+    expect(segments[1].text).toContain("minute-8");
+  });
+
   it("normalizes structured AI candidates and rejects invalid items", () => {
     const candidate = normalizeClipCandidate({
       title: "Strong opener",
@@ -90,6 +107,65 @@ describe("stream scan helpers", () => {
       recut_suggestion: "Start at the sentence with the challenge and end after the laugh."
     });
     expect(normalizeClipCandidate({ title: "bad", start_time: "oops" })).toBeNull();
+  });
+
+  it("normalizes grounded cold-open hook fields", () => {
+    const candidate = normalizeClipCandidate({
+      title: "Cold opener",
+      start_time: "00:02:10",
+      end_time: "00:02:50",
+      score: 90,
+      reason: "Strong standalone line.",
+      hook: "This changes everything.",
+      caption: "Watch the turn.",
+      difficulty: "easy",
+      clip_type: "opinion",
+      hook_start_time: "00:02:20",
+      hook_end_time: "00:02:22",
+      hook_mode: "cold_open"
+    });
+
+    expect(candidate).toMatchObject({
+      hook_start_time: 140,
+      hook_end_time: 142,
+      hook_mode: "cold_open"
+    });
+  });
+
+  it("deduplicates heavily overlapping candidates and keeps the stronger one", () => {
+    const weaker = normalizeClipCandidate({
+      title: "Weaker",
+      start_time: "00:02:00",
+      end_time: "00:02:40",
+      score: 75,
+      reason: "Same moment.",
+      hook: "The same hook.",
+      caption: "The same payoff.",
+      difficulty: "easy",
+      clip_type: "reaction",
+      attention_score: 75,
+      hook_strength: 72,
+      payoff_score: 70,
+      recommendation: "maybe"
+    })!;
+    const stronger = normalizeClipCandidate({
+      title: "Stronger",
+      start_time: "00:02:04",
+      end_time: "00:02:42",
+      score: 94,
+      reason: "Same moment, stronger cut.",
+      hook: "The same hook.",
+      caption: "The same payoff.",
+      difficulty: "easy",
+      clip_type: "reaction",
+      attention_score: 96,
+      emotion_spike: 90,
+      hook_strength: 95,
+      payoff_score: 92,
+      recommendation: "export"
+    })!;
+
+    expect(dedupeClipCandidates([weaker, stronger], 0.7).map((candidate) => candidate.title)).toEqual(["Stronger"]);
   });
 
   it("keeps legacy clip idea candidates working with v2 scoring defaults", () => {
@@ -163,7 +239,7 @@ describe("stream scan helpers", () => {
     expect(ranked.some((candidate) => candidate.recommendation === "needs_recut")).toBe(true);
   });
 
-  it("stores v2.1 scoring metadata without adding database columns", () => {
+  it("stores v3 scoring and hook metadata without adding database columns", () => {
     const candidate = normalizeClipCandidate({
       title: "To je dosť tvrdý názor",
       start_time: "00:02:10",
@@ -182,7 +258,11 @@ describe("stream scan helpers", () => {
       retention_risk: 28,
       edit_difficulty: 42,
       recommendation: "needs_recut",
-      recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii."
+      recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii.",
+      source_quote: "Toto by som nikdy nepovedal nahlas.",
+      hook_mode: "cold_open",
+      hook_start_time: "00:02:20",
+      hook_end_time: "00:02:22"
     });
 
     const payload = clipIdeaInsertPayload("video-1", candidate!, "test");
@@ -193,11 +273,15 @@ describe("stream scan helpers", () => {
       score: 86,
       raw_data: {
         source: "test",
-        moment_finder_version: "v2.1",
-        moment_v2: {
+        moment_finder_version: "v3",
+        moment_v3: {
           attention_score: 88,
           recommendation: "needs_recut",
-          recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii."
+          recut_suggestion: "Začni až vetou s názorom a ukonči po reakcii.",
+          source_quote: "Toto by som nikdy nepovedal nahlas.",
+          hook_mode: "cold_open",
+          hook_start_seconds: 140,
+          hook_end_seconds: 142
         }
       }
     });

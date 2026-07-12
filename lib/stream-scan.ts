@@ -55,6 +55,9 @@ export type NormalizedClipCandidate = {
   recommendation: (typeof clipRecommendations)[number];
   recut_suggestion: string;
   source_quote: string;
+  hook_mode?: "natural" | "cold_open";
+  hook_start_time?: number | null;
+  hook_end_time?: number | null;
 };
 
 const aiCandidateSchema = z.object({
@@ -76,7 +79,10 @@ const aiCandidateSchema = z.object({
   edit_difficulty: z.number().min(0).max(100).optional(),
   recommendation: z.enum(clipRecommendations).optional(),
   recut_suggestion: z.string().optional(),
-  source_quote: z.string().optional()
+  source_quote: z.string().optional(),
+  hook_mode: z.enum(["natural", "cold_open"]).optional(),
+  hook_start_time: z.string().optional(),
+  hook_end_time: z.string().optional()
 });
 
 export function parseTimestampToSeconds(timestamp: string) {
@@ -128,6 +134,28 @@ export function buildTranscriptSegments(items: TranscriptItem[], segmentLengthSe
   return segments;
 }
 
+export function buildOverlappingTranscriptSegments(
+  items: TranscriptItem[],
+  windowSeconds = 600,
+  overlapSeconds = 120
+): TranscriptSegment[] {
+  if (items.length === 0) return [];
+  if (windowSeconds <= 0 || overlapSeconds < 0 || overlapSeconds >= windowSeconds) {
+    throw new Error("Transcript window must be positive and larger than its overlap.");
+  }
+
+  const segments: TranscriptSegment[] = [];
+  const finalEnd = Math.max(...items.map((item) => item.end));
+  const step = windowSeconds - overlapSeconds;
+  for (let windowStart = 0; windowStart < finalEnd; windowStart += step) {
+    const windowEnd = windowStart + windowSeconds;
+    const selected = items.filter((item) => item.end > windowStart && item.start < windowEnd);
+    if (selected.length === 0) continue;
+    segments.push(toSegment(segments.length, selected));
+  }
+  return segments;
+}
+
 export function normalizeClipCandidate(value: unknown): NormalizedClipCandidate | null {
   const parsed = aiCandidateSchema.safeParse(value);
   if (!parsed.success) return null;
@@ -136,6 +164,7 @@ export function normalizeClipCandidate(value: unknown): NormalizedClipCandidate 
     const start = parseTimestampToSeconds(parsed.data.start_time);
     const end = parseTimestampToSeconds(parsed.data.end_time);
     if (end <= start) return null;
+    const hook = normalizeHookBounds(parsed.data, start, end);
 
     return {
       title: parsed.data.title,
@@ -156,7 +185,8 @@ export function normalizeClipCandidate(value: unknown): NormalizedClipCandidate 
       edit_difficulty: normalizeScore(parsed.data.edit_difficulty, 50),
       recommendation: parsed.data.recommendation ?? "maybe",
       recut_suggestion: parsed.data.recut_suggestion?.trim() ?? "",
-      source_quote: parsed.data.source_quote?.trim() ?? ""
+      source_quote: parsed.data.source_quote?.trim() ?? "",
+      ...hook
     };
   } catch {
     return null;
@@ -169,13 +199,20 @@ export function normalizeClipCandidates(value: unknown): NormalizedClipCandidate
 }
 
 export function rankClipCandidates(candidates: NormalizedClipCandidate[], limit = 8) {
-  return [...candidates]
+  const eligible = candidates
     .filter((candidate) => {
       const duration = candidate.end_time - candidate.start_time;
       return duration >= 20 && duration <= 60 && candidate.recommendation !== "skip";
-    })
-    .sort((first, second) => v2MomentScore(second) - v2MomentScore(first))
-    .slice(0, limit);
+    });
+  return dedupeClipCandidates(eligible).slice(0, limit);
+}
+
+export function dedupeClipCandidates(candidates: NormalizedClipCandidate[], threshold = 0.7) {
+  return [...candidates]
+    .sort((first, second) => v3MomentScore(second) - v3MomentScore(first))
+    .filter((candidate, index, ranked) =>
+      ranked.slice(0, index).every((kept) => overlapRatio(candidate, kept) < threshold)
+    );
 }
 
 export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandidate, source: string) {
@@ -193,8 +230,8 @@ export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandi
     status: "idea",
     raw_data: {
       source,
-      moment_finder_version: "v2.1",
-      moment_v2: {
+      moment_finder_version: "v3",
+      moment_v3: {
         attention_score: idea.attention_score,
         emotion_spike: idea.emotion_spike,
         hook_strength: idea.hook_strength,
@@ -204,7 +241,10 @@ export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandi
         edit_difficulty: idea.edit_difficulty,
         recommendation: idea.recommendation,
         recut_suggestion: idea.recut_suggestion,
-        source_quote: idea.source_quote
+        source_quote: idea.source_quote,
+        hook_mode: idea.hook_mode ?? "natural",
+        hook_start_seconds: idea.hook_start_time ?? null,
+        hook_end_seconds: idea.hook_end_time ?? null
       }
     }
   };
@@ -504,7 +544,7 @@ function normalizeScore(value: number | undefined, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(Number(value ?? fallback))));
 }
 
-function v2MomentScore(candidate: NormalizedClipCandidate) {
+function v3MomentScore(candidate: NormalizedClipCandidate) {
   const signal =
     candidate.attention_score * 0.26 +
     candidate.emotion_spike * 0.18 +
@@ -514,6 +554,31 @@ function v2MomentScore(candidate: NormalizedClipCandidate) {
   const penalty = candidate.context_needed * 0.14 + candidate.retention_risk * 0.18 + candidate.edit_difficulty * 0.06;
   const recommendationBoost = candidate.recommendation === "export" ? 8 : candidate.recommendation === "needs_recut" ? -3 : 0;
   return signal - penalty + recommendationBoost;
+}
+
+function overlapRatio(first: NormalizedClipCandidate, second: NormalizedClipCandidate) {
+  const intersection = Math.max(0, Math.min(first.end_time, second.end_time) - Math.max(first.start_time, second.start_time));
+  const shorterDuration = Math.min(first.end_time - first.start_time, second.end_time - second.start_time);
+  return shorterDuration > 0 ? intersection / shorterDuration : 0;
+}
+
+function normalizeHookBounds(
+  data: z.infer<typeof aiCandidateSchema>,
+  candidateStart: number,
+  candidateEnd: number
+): Pick<NormalizedClipCandidate, "hook_mode" | "hook_start_time" | "hook_end_time"> {
+  if (data.hook_mode !== "cold_open" || !data.hook_start_time || !data.hook_end_time) {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+
+  const hookStart = parseTimestampToSeconds(data.hook_start_time);
+  const hookEnd = parseTimestampToSeconds(data.hook_end_time);
+  const hookDuration = hookEnd - hookStart;
+  if (hookStart < candidateStart || hookEnd > candidateEnd || hookDuration < 1 || hookDuration > 3) {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+
+  return { hook_mode: "cold_open", hook_start_time: hookStart, hook_end_time: hookEnd };
 }
 
 function toSegment(segmentIndex: number, items: TranscriptItem[]): TranscriptSegment {
