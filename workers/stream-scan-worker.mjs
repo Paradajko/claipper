@@ -366,8 +366,15 @@ async function processRenderClip(job, { ready }) {
   }
 
   const storagePath = `${video.id}/${clip.id}.mp4`;
-  await uploadFile(buckets.clips, storagePath, outputPath, "video/mp4");
-  await supabase
+  try {
+    await uploadFile(buckets.clips, storagePath, outputPath, "video/mp4");
+  } catch (error) {
+    if (ready && qualityCheck) {
+      await saveFailedQualityCheck(renderClip, qualityCheck, error);
+    }
+    throw error;
+  }
+  const { error: clipUpdateError } = await supabase
     .from("clips")
     .update({
       storage_bucket: buckets.clips,
@@ -385,23 +392,42 @@ async function processRenderClip(job, { ready }) {
       updated_at: new Date().toISOString()
     })
     .eq("id", renderClip.id);
+  if (clipUpdateError) throw new Error(`Could not save rendered clip: ${clipUpdateError.message}`);
 
   if (renderClip.clip_idea_id) {
-    await supabase.from("clip_ideas").update({ status: ready ? "rendered" : "drafted" }).eq("id", renderClip.clip_idea_id);
+    const { error: ideaUpdateError } = await supabase
+      .from("clip_ideas")
+      .update({ status: ready ? "rendered" : "drafted" })
+      .eq("id", renderClip.clip_idea_id);
+    if (ideaUpdateError) throw new Error(`Could not update clip idea after render: ${ideaUpdateError.message}`);
   }
   await updateJob(job.id, "completed", `${renderLabel}_completed`, 100);
 }
 
-async function saveFailedQualityCheck(clip, qualityCheck) {
-  await supabase
+async function saveFailedQualityCheck(clip, qualityCheck, renderError = null) {
+  const renderFailure = renderError
+    ? {
+        stage: "uploading_render",
+        error_message: userFriendlyWorkerError(renderError),
+        technical_error: cleanError(renderError),
+        failed_at: new Date().toISOString()
+      }
+    : null;
+  const { error: failedQualityUpdateError } = await supabase
     .from("clips")
     .update({
       render_status: "failed",
       status: "editing",
-      raw_data: { ...(clip.raw_data ?? {}), render_version: 2, quality_check: qualityCheck },
+      raw_data: {
+        ...(clip.raw_data ?? {}),
+        render_version: 2,
+        quality_check: qualityCheck,
+        ...(renderFailure ? { render_failure: renderFailure } : {})
+      },
       updated_at: new Date().toISOString()
     })
     .eq("id", clip.id);
+  if (failedQualityUpdateError) throw new Error(`Could not save failed render state: ${failedQualityUpdateError.message}`);
 }
 
 async function refineReadyClipTiming(videoId, clip) {
