@@ -120,6 +120,13 @@ describe("AI-first app workflow naming", () => {
     expect(reviewClient).not.toContain("/draft");
     expect(detailPage).not.toContain("Generate Draft");
     expect(readyRoute).toContain("await request.formData()");
+    for (const field of [
+      "hookMode", "hookStartSeconds", "hookEndSeconds", "startSeconds", "endSeconds",
+      "framingMode", "backgroundMode", "addCaptions", "subtitlePreset", "enhanceEnabled"
+    ]) {
+      expect(readyRoute).toContain(field);
+    }
+    expect(readyRoute).toContain("edit_plan");
     expect(readyRoute).toContain("add_captions: addCaptions");
     expect(readyRoute).toContain("add_hook_overlay: false");
     expect(readyRoute).toContain('job_type: "render_ready_clip"');
