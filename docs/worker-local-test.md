@@ -1,193 +1,72 @@
-# Claipper Worker Local Test
+# Claipper Local Manual Test
 
-Use this to verify the current Stream Scan flow end-to-end:
+Codex runs automated tests and starts the services, but does not upload or process real media. Use this checklist for the first manual CZ/SK video test.
 
-Direct upload or platform import -> Supabase Storage -> `processing_jobs` -> external worker -> transcript/clip ideas/draft clips -> Supabase Storage -> UI status.
+## 1. Prepare
 
-## 1. Set env vars
+1. Fill `.env.local` using `.env.example`.
+2. Set a random `CLAIPPER_LOCAL_AGENT_TOKEN`.
+3. Ensure Supabase migrations `001_claipper_core.sql` through `007_atomic_ready_clip_queue.sql` are applied.
+4. Install FFmpeg with `brew install ffmpeg` if needed.
+5. Keep the Railway worker stopped so it cannot claim local jobs.
 
-Create `.env.local` from `.env.example` and fill:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-OPENAI_API_KEY=
-
-STORAGE_BUCKET_ORIGINALS=original-videos
-STORAGE_BUCKET_AUDIO=extracted-audio
-STORAGE_BUCKET_CLIPS=rendered-clips
-STORAGE_BUCKET_SUBTITLES=subtitles
-
-WORKER_ID=local-worker
-WORKER_POLL_INTERVAL_MS=3000
-FFMPEG_PATH=ffmpeg
-YTDLP_PATH=yt-dlp
-```
-
-Install local binaries if needed:
+## 2. Start
 
 ```bash
-brew install ffmpeg yt-dlp
+mkdir -p /Users/paradajko/ClaipperStorage
+npm run dev:local
 ```
 
-## 2. Run migrations
+Open `http://127.0.0.1:3000/app/content-lab`. The agent health endpoint is `http://127.0.0.1:43120/health`.
 
-```bash
-supabase db push --linked
-```
+## 3. Upload
 
-This creates the worker heartbeat table, processing job debug fields, and required Storage buckets.
+1. Choose one CZ/SK MP4, MOV, MKV, or WEBM file.
+2. Optionally choose the Kick chat JSON export. The supplied `vip_rewards_on_touken.ggtoukengg_messages.json` format is supported.
+3. Leave chat offset at `0` when the first chat timestamp matches the start of the video. Adjust it only when the exports use different starts.
+4. Enter the same local agent token as `.env.local`.
+5. Select `Start analysis`.
 
-## 3. Smoke test the worker environment
+The browser streams both files directly to the Mac. Supabase receives only records, timestamps, transcript data, chat aggregates, job progress, clip ideas, and render metadata.
 
-```bash
-npm run worker:smoke-test
-```
+## 4. Expected analysis
 
-Every line should show `PASS`. This does not process video. It only checks Supabase, buckets, tables, a test job insert/update/delete, FFmpeg, yt-dlp, and OpenAI env presence.
+The worker should:
 
-## 4. Start Next app
+1. Probe exact duration.
+2. Extract sequential 10-minute, 48 kbps mono audio chunks with a 5-second overlap.
+3. Transcribe each chunk and merge absolute word/segment timestamps without overlap duplicates.
+4. Build 5-10 minute analysis windows.
+5. Add anonymous Kick activity summaries as a bounded supporting signal.
+6. Find, ground, rank, refine, and verify multiple 20-60 second moments.
+7. Show timestamps, source quote, hook, caption, recommendation, edit difficulty, and chat signal in Moment Review.
 
-```bash
-npm run dev
-```
+## 5. Export checks
 
-Open `/app/content-lab`.
+For at least one strong moment, test:
 
-## 5. Start worker
+- Natural timeline
+- Cold open with a grounded 1-3 second hook moved first
+- Center, left, and right framing
+- Crop and blur background
+- Creator captions inside the lower-platform safe area
+- Creator Enhance
 
-In another terminal:
-
-```bash
-npm run worker:stream-scan
-```
-
-Expected startup output:
+The ready output should be a playable 1080x1920 H.264/AAC MP4. The UI should offer it after FFprobe QA passes. Files are stored under:
 
 ```text
-Claipper Stream Scan Worker
-Worker ID: local-worker
-Supabase: connected
-OpenAI key: present
-FFmpeg: available
-yt-dlp: available
-Buckets:
-- original-videos
-- extracted-audio
-- rendered-clips
-Polling every 3000ms
+/Users/paradajko/ClaipperStorage/<video-id>/clips/<clip-id>/ready.mp4
 ```
 
-The Content Lab worker card should change to `Worker connected` within a few seconds.
+## 6. Failure checks
 
-## 6. Upload a short MP4
+- Agent offline: start `npm run dev:local` and retry.
+- Invalid token: make the browser token match `CLAIPPER_LOCAL_AGENT_TOKEN`.
+- Worker offline: inspect the `worker` process in the combined terminal output.
+- FFmpeg/FFprobe missing: install FFmpeg or set absolute binary paths.
+- OpenAI failure: verify `OPENAI_API_KEY` and inspect `processing_jobs.technical_error`.
+- No moments: inspect the saved transcript before changing ranking thresholds.
 
-Use the Upload video tab in Content Lab. Pick a short MP4 first, ideally under 2 minutes for the first test.
+## Current manual scope
 
-Expected UI flow:
-
-1. Upload progress appears.
-2. Video opens on its detail page.
-3. Recent videos shows the processing job status and current step.
-4. Worker logs show steps:
-   - `downloading_source`
-   - `extracting_audio`
-   - `uploading_audio`
-   - `transcribing`
-   - `saving_transcript`
-   - `segmenting`
-   - `analyzing_segments`
-   - `ranking_candidates`
-   - `saving_clip_ideas`
-   - `ready`
-5. Clip ideas appear on the video detail page.
-
-## 7. Debug failures
-
-Content Lab shows:
-
-- worker connected/not connected
-- last seen time
-- current job id
-- video status
-- processing job status
-- current step
-- progress
-- clean error message
-
-In development, `/app/content-lab/[id]` also shows a developer debug panel with video id, storage path, job id, worker id, current step, technical error, transcript count, segment count, and clip idea count.
-
-## Common errors and fixes
-
-### Missing env vars
-
-Run:
-
-```bash
-npm run worker:smoke-test
-```
-
-The smoke test prints exactly which env vars are missing.
-
-### Worker offline
-
-Content Lab shows:
-
-```text
-Processing worker is not connected. Uploaded videos will wait in queue.
-```
-
-Start:
-
-```bash
-npm run worker:stream-scan
-```
-
-### Bucket not found
-
-Run migrations:
-
-```bash
-supabase db push --linked
-```
-
-Then run:
-
-```bash
-npm run worker:smoke-test
-```
-
-### Supabase permission denied
-
-Use `SUPABASE_SERVICE_ROLE_KEY` for the worker. Do not use the anon key for worker processing.
-
-### FFmpeg not found
-
-Install FFmpeg or set `FFMPEG_PATH`:
-
-```bash
-brew install ffmpeg
-FFMPEG_PATH=/opt/homebrew/bin/ffmpeg npm run worker:stream-scan
-```
-
-### yt-dlp not found
-
-Install yt-dlp or set `YTDLP_PATH`:
-
-```bash
-brew install yt-dlp
-YTDLP_PATH=/opt/homebrew/bin/yt-dlp npm run worker:stream-scan
-```
-
-### OpenAI key missing
-
-Set `OPENAI_API_KEY` in `.env.local`. The worker fails fast without it.
-
-### Transcription failed
-
-Check worker logs and the development debug panel. Common causes are unsupported media audio, invalid OpenAI key, or a source file without audio.
-
-### AI returned invalid JSON
-
-The worker keeps processing other segments, but if no valid candidates are saved, inspect the worker logs and transcript segment text.
+The operator still approves moments, adjusts edit controls, downloads the final clip, and publishes it. MyLaura integration, public registration, automatic social upload, account generation, payouts, and platform-link importing are not part of this local MVP.

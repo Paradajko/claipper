@@ -395,19 +395,25 @@ describe("AI-first app workflow naming", () => {
     expect(migration).toContain("add column if not exists source_storage_path");
   });
 
-  it("documents the production worker handoff without claiming a video smoke test", () => {
-    const railwayGuide = read("docs/worker-railway-deploy.md");
+  it("documents the one-command local runtime without claiming a real video test", () => {
+    const localGuide = read("docs/worker-local-test.md");
     const workerReadme = read("workers/README.md");
+    const packageJson = read("package.json");
 
-    for (const source of [railwayGuide, workerReadme]) {
-      expect(source).toContain("006_r2_original_video_storage.sql");
-      expect(source).toContain("OBJECT_STORAGE_ENDPOINT");
-      expect(source).toContain("OBJECT_STORAGE_SECRET_ACCESS_KEY");
-      expect(source).toContain("FFPROBE_PATH");
-      expect(source).toContain("No real video was tested by Codex");
+    for (const source of [localGuide, workerReadme]) {
+      expect(source).toContain("npm run dev:local");
+      expect(source).toContain("Railway worker");
+      expect(source).toMatch(/No real video was tested by Codex|does not upload or process real media/);
       expect(source).toContain("Cold open");
       expect(source).toContain("Creator Enhance");
     }
+    expect(workerReadme).toContain("CLAIPPER_STORAGE_MODE=local");
+    expect(workerReadme).toContain("CLAIPPER_LOCAL_STORAGE_DIR");
+    expect(workerReadme).toContain("FFPROBE_PATH");
+    expect(packageJson).toContain('"dev:local"');
+    expect(packageJson).toContain("concurrently --kill-others-on-fail");
+    expect(packageJson).toContain("npm:worker:local-agent");
+    expect(packageJson).toContain("npm:worker:stream-scan");
   });
 
   it("provides an explicit development-only stream scan reset script", () => {

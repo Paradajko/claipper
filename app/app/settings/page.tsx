@@ -7,6 +7,11 @@ const envChecks = [
   { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", present: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), note: "Browser-safe Supabase key" },
   { key: "SUPABASE_SERVICE_ROLE_KEY", present: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY), note: "Server inserts and updates" },
   { key: "OPENAI_API_KEY", present: Boolean(process.env.OPENAI_API_KEY), note: "AI helper generation" },
+  { key: "CLAIPPER_STORAGE_MODE", present: process.env.CLAIPPER_STORAGE_MODE === "local", note: "Local media mode" },
+  { key: "CLAIPPER_LOCAL_STORAGE_DIR", present: Boolean(process.env.CLAIPPER_LOCAL_STORAGE_DIR), note: "Originals and rendered clips on this Mac" },
+  { key: "CLAIPPER_LOCAL_AGENT_TOKEN", present: Boolean(process.env.CLAIPPER_LOCAL_AGENT_TOKEN), note: "Protected local uploads" },
+  { key: "NEXT_PUBLIC_CLAIPPER_AGENT_URL", present: Boolean(process.env.NEXT_PUBLIC_CLAIPPER_AGENT_URL), note: "Browser connection to local agent" },
+  { key: "WORKER_ID", present: Boolean(process.env.WORKER_ID), note: "Local processing worker identity" },
   { key: "APP_PASSWORD", present: Boolean(process.env.APP_PASSWORD), note: "Simple dashboard password" }
 ];
 
@@ -34,10 +39,11 @@ export default function SettingsPage() {
         <Card>
           <h2 className="mb-5 text-lg font-semibold text-white">Basic preferences</h2>
           <div className="space-y-4 text-sm text-slate-300">
-            <p>Language: English only</p>
+            <p>Content language: Czech and Slovak</p>
             <p>Primary domain: claipper.com</p>
             <p>Data mode: {isSupabaseConfigured ? "Supabase connected" : "Demo fallback"}</p>
-            <p>Manual scope: video rendering, auto-upload, and MyLaura campaign/payout logic are outside this version.</p>
+            <p>Media mode: local Mac storage</p>
+            <p>Manual scope: moment approval, small edits, publishing, and MyLaura handoff.</p>
           </div>
         </Card>
       </div>

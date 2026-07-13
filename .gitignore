@@ -9,3 +9,4 @@ dist
 supabase/.temp
 *.tsbuildinfo
 .app-password-production.txt
+.claipper-storage
