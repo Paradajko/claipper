@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyChatSignalsToCandidate,
   buildOverlappingTranscriptSegments,
   buildTranscriptSegments,
   clipIdeaInsertPayload,
@@ -427,5 +428,87 @@ describe("stream scan helpers", () => {
       "Potom mi klient povedal, ze zmluvu jednoducho zahodi. A ja som mu povedal, ze takto sa biznis nerobi. Vtedy nastalo uplne ticho a vsetci sa zacali smiat."
     );
     expect(refined.title).toBe("Klient zahodil zmluvu");
+  });
+
+  it("gives a bounded ranking boost to a grounded multi-user chat spike", () => {
+    const transcript = [{ start: 100, end: 140, text: "To auto nechcelo nastartovat a vsetci sa zacali smiat." }];
+    const candidate = normalizeClipCandidate({
+      title: "Auto nechcelo nastartovat",
+      start_time: "00:01:40",
+      end_time: "00:02:20",
+      score: 82,
+      reason: "Jasny vtipny payoff.",
+      hook: "To auto nechcelo nastartovat.",
+      caption: "Vsetci sa zacali smiat.",
+      difficulty: "easy",
+      clip_type: "funny",
+      attention_score: 84,
+      emotion_spike: 80,
+      hook_strength: 82,
+      payoff_score: 84,
+      context_needed: 20,
+      retention_risk: 20,
+      edit_difficulty: 20,
+      recommendation: "export",
+      source_quote: "To auto nechcelo nastartovat a vsetci sa zacali smiat."
+    })!;
+
+    const boosted = applyChatSignalsToCandidate(candidate, [{
+      start_seconds: 110,
+      end_seconds: 120,
+      message_count: 12,
+      unique_users: 8,
+      activity_score: 88,
+      emote_counts: { KEKW: 5 },
+      representative_messages: ["KEKW", "coze toto clipni"]
+    }], transcript);
+
+    expect(boosted).toMatchObject({
+      chat_activity_score: 88,
+      chat_message_count: 12,
+      chat_unique_users: 8,
+      chat_emote_spike: 50
+    });
+    expect(boosted.chat_signal_reason).toContain("supporting");
+
+    const noChat = { ...candidate, title: "Bez chatu", start_time: 200, end_time: 240, score: 85 };
+    expect(rankClipCandidates([noChat, boosted])[0].title).toBe("Auto nechcelo nastartovat");
+  });
+
+  it("ignores promotional chat and never boosts skip or ungrounded candidates", () => {
+    const transcript = [{ start: 100, end: 140, text: "Hovorime iba o beznom nastaveni kamery." }];
+    const base = normalizeClipCandidate({
+      title: "Vymysleny konflikt",
+      start_time: "00:01:40",
+      end_time: "00:02:20",
+      score: 95,
+      reason: "Nepodlozeny moment.",
+      hook: "Prisiel velky konflikt.",
+      caption: "Velky konflikt.",
+      difficulty: "easy",
+      clip_type: "reaction",
+      recommendation: "export",
+      source_quote: "Prisiel velky konflikt."
+    })!;
+    const promoWindow = [{
+      start_seconds: 110,
+      end_seconds: 120,
+      message_count: 30,
+      unique_users: 15,
+      activity_score: 100,
+      emote_counts: {},
+      representative_messages: ["Check bonuses https://example.com", "monthly wager leaderboard"]
+    }];
+
+    const ungrounded = applyChatSignalsToCandidate(base, promoWindow, transcript);
+    const skipped = applyChatSignalsToCandidate({ ...base, recommendation: "skip" }, [{
+      ...promoWindow[0],
+      representative_messages: ["wtf", "clipni toto"]
+    }], transcript);
+
+    expect(ungrounded.chat_activity_score).toBe(0);
+    expect(ungrounded.chat_signal_reason).toContain("ungrounded");
+    expect(skipped.chat_activity_score).toBe(0);
+    expect(rankClipCandidates([skipped])).toEqual([]);
   });
 });

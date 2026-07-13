@@ -35,6 +35,16 @@ export type TranscriptSegment = {
   text: string;
 };
 
+export type ChatActivityWindow = {
+  start_seconds: number;
+  end_seconds: number;
+  message_count: number;
+  unique_users: number;
+  activity_score: number;
+  emote_counts: Record<string, number>;
+  representative_messages: string[];
+};
+
 export type NormalizedClipCandidate = {
   title: string;
   start_time: number;
@@ -58,6 +68,11 @@ export type NormalizedClipCandidate = {
   hook_mode?: "natural" | "cold_open";
   hook_start_time?: number | null;
   hook_end_time?: number | null;
+  chat_activity_score?: number;
+  chat_message_count?: number;
+  chat_unique_users?: number;
+  chat_emote_spike?: number;
+  chat_signal_reason?: string;
 };
 
 const aiCandidateSchema = z.object({
@@ -244,9 +259,61 @@ export function clipIdeaInsertPayload(videoId: string, idea: NormalizedClipCandi
         source_quote: idea.source_quote,
         hook_mode: idea.hook_mode ?? "natural",
         hook_start_seconds: idea.hook_start_time ?? null,
-        hook_end_seconds: idea.hook_end_time ?? null
+        hook_end_seconds: idea.hook_end_time ?? null,
+        chat_activity_score: idea.chat_activity_score ?? 0,
+        chat_message_count: idea.chat_message_count ?? 0,
+        chat_unique_users: idea.chat_unique_users ?? 0,
+        chat_emote_spike: idea.chat_emote_spike ?? 0,
+        chat_signal_reason: idea.chat_signal_reason ?? ""
       }
     }
+  };
+}
+
+export function applyChatSignalsToCandidate(
+  candidate: NormalizedClipCandidate,
+  windows: ChatActivityWindow[],
+  transcriptItems: TranscriptItem[]
+): NormalizedClipCandidate {
+  const emptySignal = {
+    chat_activity_score: 0,
+    chat_message_count: 0,
+    chat_unique_users: 0,
+    chat_emote_spike: 0
+  };
+  if (candidate.recommendation === "skip") {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "Chat ignored because transcript recommendation is skip." };
+  }
+  if (!candidateQuoteIsGrounded(candidate, transcriptItems)) {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "Chat ignored because the source quote is ungrounded." };
+  }
+
+  const overlapping = windows.filter(
+    (window) => window.end_seconds > candidate.start_time && window.start_seconds < candidate.end_time
+  );
+  const safe = overlapping.filter((window) =>
+    window.representative_messages.some((message) => !isPromotionalChatText(message))
+  );
+  const messageCount = safe.reduce((sum, window) => sum + window.message_count, 0);
+  const uniqueUsers = safe.reduce((maximum, window) => Math.max(maximum, window.unique_users), 0);
+  const activityScore = safe.reduce((maximum, window) => Math.max(maximum, window.activity_score), 0);
+  const emoteCount = safe.reduce(
+    (sum, window) => sum + Object.values(window.emote_counts ?? {}).reduce((count, value) => count + Number(value || 0), 0),
+    0
+  );
+  const emoteSpike = Math.min(100, emoteCount * 10);
+
+  if (messageCount < 4 || uniqueUsers < 3 || activityScore < 15) {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "No genuine multi-user chat spike overlapped this moment." };
+  }
+
+  return {
+    ...candidate,
+    chat_activity_score: Math.min(100, Math.round(activityScore)),
+    chat_message_count: messageCount,
+    chat_unique_users: uniqueUsers,
+    chat_emote_spike: emoteSpike,
+    chat_signal_reason: "Grounded transcript moment has supporting multi-user chat activity."
   };
 }
 
@@ -553,7 +620,25 @@ function v3MomentScore(candidate: NormalizedClipCandidate) {
     candidate.score * 0.12;
   const penalty = candidate.context_needed * 0.14 + candidate.retention_risk * 0.18 + candidate.edit_difficulty * 0.06;
   const recommendationBoost = candidate.recommendation === "export" ? 8 : candidate.recommendation === "needs_recut" ? -3 : 0;
-  return signal - penalty + recommendationBoost;
+  const chatBoost = Math.min(
+    8,
+    (candidate.chat_activity_score ?? 0) * 0.06 +
+      (candidate.chat_unique_users ?? 0) * 0.3 +
+      (candidate.chat_emote_spike ?? 0) * 0.02
+  );
+  return signal - penalty + recommendationBoost + chatBoost;
+}
+
+function candidateQuoteIsGrounded(candidate: NormalizedClipCandidate, transcriptItems: TranscriptItem[]) {
+  const sourceTokens = contentTokens(candidate.source_quote ?? "");
+  if (sourceTokens.length === 0) return false;
+  const transcriptTokens = new Set(contentTokens(extractSourceQuote(transcriptItems, candidate.start_time, candidate.end_time)));
+  const matches = sourceTokens.filter((token) => transcriptTokens.has(token)).length;
+  return matches >= Math.min(2, sourceTokens.length);
+}
+
+function isPromotionalChatText(value: string) {
+  return /https?:\/\/|chat\s+commands?|check\s+bonuses?|monthly\s+wager|leaderboard/i.test(value);
 }
 
 function overlapRatio(first: NormalizedClipCandidate, second: NormalizedClipCandidate) {

@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider, uploadOriginalVideo } from "./object-storage.mjs";
 import { buildAudioChunkPlan, mergeVerboseTranscripts } from "./audio-chunks.mjs";
+import { buildChatWindows } from "./kick-chat.mjs";
 import { localRelativePath, resolveLocalMediaPath } from "./local-storage.mjs";
 import {
   buildYtDlpDownloadArgs,
@@ -289,19 +290,20 @@ async function processAnalyzeVideo(job, { localSourcePath = null, workDir: exist
   const transcriptItems = toTranscriptItems(transcript);
   const transcriptWords = toTranscriptWords(transcript);
   const segments = buildOverlappingTranscriptSegments(transcriptItems, 600, 120);
+  const chatWindows = await loadNormalizedChatWindows(video);
   await saveTranscriptSegments(video.id, transcriptId, segments);
 
   await updateJob(job.id, "running", "analyzing_segments", 75);
   await updateVideo(video.id, "analyzing", 75, "Analyzing transcript chunks for clip candidates.");
   const candidates = [];
   for (const segment of segments) {
-    candidates.push(...(await analyzeTranscriptSegment(segment)));
+    candidates.push(...(await analyzeTranscriptSegment(segment, chatWindows)));
   }
   console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} local candidates found: ${candidates.length}`);
 
   await updateJob(job.id, "running", "ranking_candidates", 90);
   await updateVideo(video.id, "ranking", 90, "Ranking the strongest moments.");
-  const ranked = await rankCandidatesWithAi(candidates);
+  const ranked = await rankCandidatesWithAi(candidates, chatWindows, transcriptItems);
   const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
   const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
   const verified = [];
@@ -945,6 +947,22 @@ async function saveClipIdeas(videoId, ideas) {
   if (error) throw new Error(error.message);
 }
 
+async function loadNormalizedChatWindows(video) {
+  const storagePath = video.raw_data?.normalized_chat_storage_path;
+  if (!storagePath || getVideoSourceStorageProvider(video) !== "local") return [];
+
+  try {
+    const chatPath = resolveLocalMediaPath(localStorageRoot, storagePath);
+    const normalizedMessages = JSON.parse(await readFile(chatPath, "utf8"));
+    const windows = buildChatWindows(normalizedMessages);
+    console.log(`[claipper-worker] loaded ${normalizedMessages.length} normalized chat messages in ${windows.length} windows`);
+    return windows;
+  } catch (error) {
+    console.warn(`[claipper-worker] optional Kick chat could not be loaded: ${cleanError(error)}`);
+    return [];
+  }
+}
+
 async function probeMediaDuration(sourcePath) {
   const { stdout } = await execFileAsync(ffprobeBinary, [
     "-v",
@@ -1032,7 +1050,8 @@ async function transcribeAudio(audioPath) {
   return JSON.parse(body);
 }
 
-async function analyzeTranscriptSegment(segment) {
+async function analyzeTranscriptSegment(segment, chatWindows = []) {
+  const chatSummary = chatPromptForRange(chatWindows, segment.start_time, segment.end_time);
   const completion = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
     response_format: { type: "json_object" },
@@ -1049,6 +1068,7 @@ async function analyzeTranscriptSegment(segment) {
           `Segment time: ${secondsToTimestamp(segment.start_time)}-${secondsToTimestamp(segment.end_time)}`,
           "Choose start_time close to the first strong line/reaction. Do not include generic setup unless it is required. Choose end_time after a clear payoff, laugh, answer, reversal or punchline; never end mid-thought.",
           "Return JSON as {\"candidates\":[{\"title\":\"CZ/SK string\",\"start_time\":\"HH:MM:SS\",\"end_time\":\"HH:MM:SS\",\"score\":0-100,\"reason\":\"why this can stop the scroll\",\"hook\":\"exact grounded CZ/SK hook\",\"caption\":\"CZ/SK social caption\",\"difficulty\":\"easy|medium|hard\",\"clip_type\":\"funny|reaction|opinion|educational|hype|story|other\",\"attention_score\":0-100,\"emotion_spike\":0-100,\"hook_strength\":0-100,\"payoff_score\":0-100,\"context_needed\":0-100,\"retention_risk\":0-100,\"edit_difficulty\":0-100,\"recommendation\":\"export|needs_recut|maybe|skip\",\"recut_suggestion\":\"CZ/SK note or empty string\",\"source_quote\":\"exact transcript quote\",\"hook_mode\":\"natural|cold_open\",\"hook_start_time\":\"HH:MM:SS or omitted\",\"hook_end_time\":\"HH:MM:SS or omitted\"}]}. Keep each candidate 20-60 seconds.",
+          `Kick chat activity is a supporting signal only; transcript words remain the source of truth. Anonymous aggregates: ${JSON.stringify(chatSummary)}`,
           "Transcript:",
           segment.text
         ].join("\n\n")
@@ -1060,8 +1080,11 @@ async function analyzeTranscriptSegment(segment) {
   return parseCandidatesJson(completion.choices[0]?.message.content ?? "");
 }
 
-async function rankCandidatesWithAi(candidates) {
-  const locallyRanked = rankClipCandidates(candidates, 8);
+async function rankCandidatesWithAi(candidates, chatWindows = [], transcriptItems = []) {
+  const signaledCandidates = candidates.map((candidate) =>
+    applyChatSignalsToCandidate(candidate, chatWindows, transcriptItems)
+  );
+  const locallyRanked = rankClipCandidates(signaledCandidates, 8);
   if (locallyRanked.length <= 1 || !openai) return locallyRanked;
   const completion = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
@@ -1081,7 +1104,9 @@ async function rankCandidatesWithAi(candidates) {
     max_tokens: 3000
   });
   const aiRanked = parseCandidatesJson(completion.choices[0]?.message.content ?? "");
-  const rankedAi = aiRanked.length > 0 ? rankClipCandidates(aiRanked, 8) : [];
+  const rankedAi = aiRanked.length > 0
+    ? rankClipCandidates(aiRanked.map((candidate) => applyChatSignalsToCandidate(candidate, chatWindows, transcriptItems)), 8)
+    : [];
   if (rankedAi.length >= Math.min(3, locallyRanked.length)) return rankedAi;
   return locallyRanked;
 }
@@ -1232,6 +1257,79 @@ function normalizeClipCandidate(value) {
   };
 }
 
+function chatPromptForRange(windows, startTime, endTime) {
+  return windows
+    .filter((window) => window.end_seconds > startTime && window.start_seconds < endTime)
+    .sort((first, second) => second.activity_score - first.activity_score)
+    .slice(0, 8)
+    .map((window) => ({
+      start_seconds: window.start_seconds,
+      end_seconds: window.end_seconds,
+      message_count: window.message_count,
+      unique_users: window.unique_users,
+      activity_score: window.activity_score,
+      top_emotes: Object.entries(window.emote_counts ?? {})
+        .sort(([, first], [, second]) => second - first)
+        .slice(0, 4)
+        .map(([name, count]) => ({ name, count })),
+      representative_messages: (window.representative_messages ?? []).slice(0, 3)
+    }));
+}
+
+function applyChatSignalsToCandidate(candidate, windows, transcriptItems) {
+  const emptySignal = {
+    chat_activity_score: 0,
+    chat_message_count: 0,
+    chat_unique_users: 0,
+    chat_emote_spike: 0
+  };
+  if (candidate.recommendation === "skip") {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "Chat ignored because transcript recommendation is skip." };
+  }
+  if (!candidateQuoteIsGrounded(candidate, transcriptItems)) {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "Chat ignored because the source quote is ungrounded." };
+  }
+
+  const overlapping = windows.filter(
+    (window) => window.end_seconds > candidate.start_time && window.start_seconds < candidate.end_time
+  );
+  const safe = overlapping.filter((window) =>
+    (window.representative_messages ?? []).some((message) => !isPromotionalChatText(message))
+  );
+  const messageCount = safe.reduce((sum, window) => sum + window.message_count, 0);
+  const uniqueUsers = safe.reduce((maximum, window) => Math.max(maximum, window.unique_users), 0);
+  const activityScore = safe.reduce((maximum, window) => Math.max(maximum, window.activity_score), 0);
+  const emoteCount = safe.reduce(
+    (sum, window) => sum + Object.values(window.emote_counts ?? {}).reduce((count, value) => count + Number(value || 0), 0),
+    0
+  );
+  const emoteSpike = Math.min(100, emoteCount * 10);
+  if (messageCount < 4 || uniqueUsers < 3 || activityScore < 15) {
+    return { ...candidate, ...emptySignal, chat_signal_reason: "No genuine multi-user chat spike overlapped this moment." };
+  }
+
+  return {
+    ...candidate,
+    chat_activity_score: Math.min(100, Math.round(activityScore)),
+    chat_message_count: messageCount,
+    chat_unique_users: uniqueUsers,
+    chat_emote_spike: emoteSpike,
+    chat_signal_reason: "Grounded transcript moment has supporting multi-user chat activity."
+  };
+}
+
+function candidateQuoteIsGrounded(candidate, transcriptItems) {
+  const sourceTokens = contentTokens(candidate.source_quote ?? "");
+  if (sourceTokens.length === 0) return false;
+  const transcriptTokens = new Set(contentTokens(extractSourceQuote(transcriptItems, candidate.start_time, candidate.end_time)));
+  const matches = sourceTokens.filter((token) => transcriptTokens.has(token)).length;
+  return matches >= Math.min(2, sourceTokens.length);
+}
+
+function isPromotionalChatText(value) {
+  return /https?:\/\/|chat\s+commands?|check\s+bonuses?|monthly\s+wager|leaderboard/i.test(String(value ?? ""));
+}
+
 function rankClipCandidates(candidates, limit = 20) {
   const eligible = candidates
     .filter((candidate) => {
@@ -1279,7 +1377,12 @@ function clipIdeaInsertPayload(videoId, idea, source) {
         source_quote: idea.source_quote,
         hook_mode: idea.hook_mode ?? "natural",
         hook_start_seconds: idea.hook_start_time ?? null,
-        hook_end_seconds: idea.hook_end_time ?? null
+        hook_end_seconds: idea.hook_end_time ?? null,
+        chat_activity_score: idea.chat_activity_score ?? 0,
+        chat_message_count: idea.chat_message_count ?? 0,
+        chat_unique_users: idea.chat_unique_users ?? 0,
+        chat_emote_spike: idea.chat_emote_spike ?? 0,
+        chat_signal_reason: idea.chat_signal_reason ?? ""
       }
     }
   };
@@ -1601,7 +1704,13 @@ function v3MomentScore(candidate) {
     candidate.score * 0.12;
   const penalty = candidate.context_needed * 0.14 + candidate.retention_risk * 0.18 + candidate.edit_difficulty * 0.06;
   const recommendationBoost = candidate.recommendation === "export" ? 8 : candidate.recommendation === "needs_recut" ? -3 : 0;
-  return signal - penalty + recommendationBoost;
+  const chatBoost = Math.min(
+    8,
+    (candidate.chat_activity_score ?? 0) * 0.06 +
+      (candidate.chat_unique_users ?? 0) * 0.3 +
+      (candidate.chat_emote_spike ?? 0) * 0.02
+  );
+  return signal - penalty + recommendationBoost + chatBoost;
 }
 
 function overlapRatio(first, second) {

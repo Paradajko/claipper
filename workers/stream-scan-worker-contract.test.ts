@@ -131,4 +131,18 @@ describe("ready render worker contract", () => {
     expect(worker).toContain("await rm(chunkPath, { force: true })");
     expect(worker).not.toContain("const transcript = await transcribeAudio(audioPath)");
   });
+
+  it("uses anonymized Kick chat only as a bounded grounded ranking signal", () => {
+    expect(worker).toContain("buildChatWindows");
+    expect(worker).toContain("loadNormalizedChatWindows");
+    expect(worker).toContain("normalized_chat_storage_path");
+    expect(worker).toContain("applyChatSignalsToCandidate");
+    expect(worker).toContain("supporting signal only");
+    expect(worker).toContain("chat_activity_score");
+    expect(worker).toContain("chat_message_count");
+    expect(worker).toContain("chat_unique_users");
+    expect(worker).toContain("chat_emote_spike");
+    expect(worker).toContain("chat_signal_reason");
+    expect(worker).not.toContain("chat username");
+  });
 });
