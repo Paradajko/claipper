@@ -8,9 +8,10 @@ export function isKickUrl(sourceUrl) {
 }
 
 export function buildYtDlpDownloadArgs({ sourceUrl, outputTemplate }) {
+  const kick = isKickUrl(sourceUrl);
   return [
     "--verbose",
-    ...(isKickUrl(sourceUrl) ? ["--impersonate", "chrome"] : []),
+    ...(kick ? ["--impersonate", "chrome", "--fixup", "never"] : []),
     sourceUrl,
     "--no-playlist",
     "--restrict-filenames",

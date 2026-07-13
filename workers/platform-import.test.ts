@@ -24,6 +24,21 @@ describe("platform import helpers", () => {
     expect(youtubeArgs).not.toContain("--impersonate");
   });
 
+  it("skips the disk-heavy MP4 fixup only for Kick downloads", async () => {
+    const helpers = await loadPlatformImport();
+    const kickArgs = helpers.buildYtDlpDownloadArgs?.({
+      sourceUrl: "https://kick.com/creator/videos/vod-id",
+      outputTemplate: "/tmp/source.%(ext)s"
+    });
+    const youtubeArgs = helpers.buildYtDlpDownloadArgs?.({
+      sourceUrl: "https://www.youtube.com/watch?v=video-id",
+      outputTemplate: "/tmp/source.%(ext)s"
+    });
+
+    expect(kickArgs).toEqual(expect.arrayContaining(["--fixup", "never"]));
+    expect(youtubeArgs).not.toContain("--fixup");
+  });
+
   it("accepts an available Chrome target and rejects unavailable rows", async () => {
     const helpers = await loadPlatformImport();
     const output = [

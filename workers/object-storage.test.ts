@@ -4,7 +4,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error Worker runtime modules are authored as ESM JavaScript.
-import { downloadOriginalVideo } from "./object-storage.mjs";
+import { downloadOriginalVideo, uploadOriginalVideo } from "./object-storage.mjs";
 
 const objectEnvKeys = [
   "OBJECT_STORAGE_PROVIDER",
@@ -50,5 +50,9 @@ describe("worker object storage", () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("exposes a multipart upload helper for large original videos", () => {
+    expect(typeof uploadOriginalVideo).toBe("function");
   });
 });

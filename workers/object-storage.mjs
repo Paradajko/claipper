@@ -1,7 +1,42 @@
 import { createHash, createHmac } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { S3Client } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
+
+const MULTIPART_PART_SIZE = 64 * 1024 * 1024;
+
+export async function uploadOriginalVideo({ provider, storagePath, inputPath, contentType = "video/mp4" }) {
+  if (provider === "supabase") {
+    throw new Error("Supabase original video uploads must use the Supabase Storage client.");
+  }
+
+  const config = requireObjectStorageConfigForProvider(provider);
+  const client = new S3Client({
+    region: config.region,
+    endpoint: config.endpoint,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey
+    }
+  });
+  const upload = new Upload({
+    client,
+    params: {
+      Bucket: config.bucket,
+      Key: storagePath,
+      Body: createReadStream(inputPath),
+      ContentType: contentType
+    },
+    queueSize: 2,
+    partSize: MULTIPART_PART_SIZE,
+    leavePartsOnError: false
+  });
+
+  await upload.done();
+}
 
 export async function downloadOriginalVideo({ provider, storagePath, outputPath }) {
   if (provider === "supabase") {

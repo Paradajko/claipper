@@ -92,4 +92,15 @@ describe("ready render worker contract", () => {
     expect(worker).toContain("yt-dlp Chrome impersonation unavailable");
     expect(worker).toContain('await updateVideo(job.video_id, "failed", 100, userError, userError)');
   });
+
+  it("streams platform originals to object storage and reuses the local download", () => {
+    expect(worker).toContain("uploadOriginalVideo");
+    expect(worker).toContain("processAnalyzeVideo(job, { localSourcePath: downloadedPath, workDir })");
+    expect(worker).toContain("source_storage_provider: originalProvider");
+    expect(worker).toContain("source_storage_path: storagePath");
+  });
+
+  it("cleans the large platform-import work directory after completion or failure", () => {
+    expect(worker).toContain("await rm(workDir, { recursive: true, force: true })");
+  });
 });

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
-import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
+import { downloadOriginalVideo, normalizeOriginalStorageProvider, uploadOriginalVideo } from "./object-storage.mjs";
 import {
   buildYtDlpDownloadArgs,
   createPlatformImportError,
@@ -185,53 +185,80 @@ async function processPlatformImport(job) {
   const workDir = await makeWorkDir(job.video_id);
   const outputTemplate = path.join(workDir, "source.%(ext)s");
 
-  await updateJob(job.id, "running", "downloading_source", 10);
-  await updateVideo(video.id, "downloading", 10, "Downloading platform video with processing worker.");
-
-  const downloadArgs = buildYtDlpDownloadArgs({ sourceUrl: video.source_url, outputTemplate });
-  let stdout;
   try {
-    ({ stdout } = await execFileAsync(ytDlpBinary, downloadArgs));
-  } catch (error) {
-    const failure = createPlatformImportError(error, { sourceUrl: video.source_url, args: downloadArgs });
-    console.error("[claipper-worker] yt-dlp verbose failure", failure.technicalError);
-    throw failure;
+    await updateJob(job.id, "running", "downloading_source", 10);
+    await updateVideo(video.id, "downloading", 10, "Downloading platform video with processing worker.");
+
+    const downloadArgs = buildYtDlpDownloadArgs({ sourceUrl: video.source_url, outputTemplate });
+    let stdout;
+    try {
+      ({ stdout } = await execFileAsync(ytDlpBinary, downloadArgs));
+    } catch (error) {
+      const failure = createPlatformImportError(error, { sourceUrl: video.source_url, args: downloadArgs });
+      console.error("[claipper-worker] yt-dlp verbose failure", failure.technicalError);
+      throw failure;
+    }
+
+    const downloadedPath = stdout.trim().split("\n").filter(Boolean).at(-1);
+    if (!downloadedPath) throw new Error("Downloader finished without returning a video file path.");
+
+    const extension = path.extname(downloadedPath).toLowerCase() || ".mp4";
+    const storagePath = `default/${video.id}/source${extension}`;
+    const originalProvider = normalizeOriginalStorageProvider(process.env.OBJECT_STORAGE_PROVIDER);
+    const originalBucket = originalProvider === "supabase" ? buckets.originals : process.env.OBJECT_STORAGE_BUCKET;
+
+    await updateJob(job.id, "running", "uploading_source", 20);
+    if (originalProvider === "supabase") {
+      await uploadFile(buckets.originals, storagePath, downloadedPath, "video/mp4");
+    } else {
+      await uploadOriginalVideo({
+        provider: originalProvider,
+        storagePath,
+        inputPath: downloadedPath,
+        contentType: "video/mp4"
+      });
+    }
+
+    await supabase
+      .from("videos")
+      .update({
+        storage_bucket: originalBucket,
+        storage_path: storagePath,
+        file_path: storagePath,
+        source_storage_provider: originalProvider,
+        source_storage_path: storagePath,
+        raw_data: {
+          ...(video.raw_data ?? {}),
+          source_storage_provider: originalProvider,
+          source_storage_path: storagePath
+        },
+        status: "queued",
+        progress_percent: 25,
+        progress_text: "Platform video imported. Starting analysis.",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", video.id);
+
+    await supabase.from("video_imports").update({ status: "completed", updated_at: new Date().toISOString() }).eq("video_id", video.id);
+    await processAnalyzeVideo(job, { localSourcePath: downloadedPath, workDir });
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
   }
-
-  const downloadedPath = stdout.trim().split("\n").filter(Boolean).at(-1);
-  if (!downloadedPath) throw new Error("Downloader finished without returning a video file path.");
-
-  const storagePath = `default/${video.id}/source${path.extname(downloadedPath).toLowerCase() || ".mp4"}`;
-  await uploadFile(buckets.originals, storagePath, downloadedPath, "video/mp4");
-
-  await supabase
-    .from("videos")
-    .update({
-      storage_bucket: buckets.originals,
-      storage_path: storagePath,
-      file_path: storagePath,
-      status: "queued",
-      progress_percent: 25,
-      progress_text: "Platform video imported. Starting analysis.",
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", video.id);
-
-  await supabase.from("video_imports").update({ status: "completed", updated_at: new Date().toISOString() }).eq("video_id", video.id);
-  await processAnalyzeVideo(job);
 }
 
-async function processAnalyzeVideo(job) {
+async function processAnalyzeVideo(job, { localSourcePath = null, workDir: existingWorkDir = null } = {}) {
   const video = await loadVideo(job.video_id);
   const sourceStoragePath = getVideoSourceStoragePath(video);
   if (!sourceStoragePath) throw new Error("Video is missing source storage path.");
 
-  const workDir = await makeWorkDir(job.video_id);
-  const sourcePath = path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
+  const workDir = existingWorkDir ?? await makeWorkDir(job.video_id);
+  const sourcePath = localSourcePath ?? path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
   const audioPath = path.join(workDir, "audio.mp3");
 
-  await updateJob(job.id, "running", "downloading_source", 15);
-  await downloadSourceVideo(video, sourcePath);
+  if (!localSourcePath) {
+    await updateJob(job.id, "running", "downloading_source", 15);
+    await downloadSourceVideo(video, sourcePath);
+  }
 
   await updateJob(job.id, "running", "extracting_audio", 35);
   await updateVideo(video.id, "extracting_audio", 35, "Extracting audio with FFmpeg.");
