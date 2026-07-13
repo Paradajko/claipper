@@ -120,4 +120,15 @@ describe("ready render worker contract", () => {
     expect(worker).toContain("p_storage_bucket: renderStorageBucket");
     expect(worker).toContain("p_storage_path: renderStoragePath");
   });
+
+  it("transcribes long source videos as bounded sequential audio chunks", () => {
+    expect(worker).toContain("buildAudioChunkPlan");
+    expect(worker).toContain("mergeVerboseTranscripts");
+    expect(worker).toContain("probeMediaDuration");
+    expect(worker).toContain("for (const chunk of chunkPlan)");
+    expect(worker).toContain('"-b:a", "48k"');
+    expect(worker).toContain("await transcribeAudio(chunkPath)");
+    expect(worker).toContain("await rm(chunkPath, { force: true })");
+    expect(worker).not.toContain("const transcript = await transcribeAudio(audioPath)");
+  });
 });

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider, uploadOriginalVideo } from "./object-storage.mjs";
+import { buildAudioChunkPlan, mergeVerboseTranscripts } from "./audio-chunks.mjs";
 import { localRelativePath, resolveLocalMediaPath } from "./local-storage.mjs";
 import {
   buildYtDlpDownloadArgs,
@@ -261,7 +262,6 @@ async function processAnalyzeVideo(job, { localSourcePath = null, workDir: exist
     : await makeWorkDir(job.video_id));
   await mkdir(workDir, { recursive: true });
   const sourcePath = localSourcePath ?? storedLocalSourcePath ?? path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
-  const audioPath = path.join(workDir, "audio.mp3");
 
   if (!localSourcePath && !storedLocalSourcePath) {
     await updateJob(job.id, "running", "downloading_source", 15);
@@ -269,19 +269,17 @@ async function processAnalyzeVideo(job, { localSourcePath = null, workDir: exist
   }
 
   await updateJob(job.id, "running", "extracting_audio", 35);
-  await updateVideo(video.id, "extracting_audio", 35, "Extracting audio with FFmpeg.");
-  await execFileAsync(ffmpegBinary, ["-y", "-i", sourcePath, "-vn", "-acodec", "libmp3lame", "-ar", "16000", "-ac", "1", audioPath]);
-
-  const audioStoragePath = localMode ? localRelativePath(video.id, "working", "audio.mp3") : `${video.id}/audio.mp3`;
-  if (!localMode) {
-    await updateJob(job.id, "running", "uploading_audio", 43);
-    await uploadFile(buckets.audio, audioStoragePath, audioPath, "audio/mpeg");
-  }
-  await supabase.from("videos").update({ audio_path: audioStoragePath }).eq("id", video.id);
+  await updateVideo(video.id, "extracting_audio", 35, "Preparing bounded audio chunks with FFmpeg.");
+  const durationSeconds = await probeMediaDuration(sourcePath);
+  await supabase.from("videos").update({ duration_seconds: Math.ceil(durationSeconds), audio_path: null }).eq("id", video.id);
 
   await updateJob(job.id, "running", "transcribing", 50);
-  await updateVideo(video.id, "transcribing", 50, "Transcribing audio with timestamps.");
-  const transcript = await transcribeAudio(audioPath);
+  await updateVideo(video.id, "transcribing", 50, "Transcribing bounded audio chunks with timestamps.");
+  const transcript = await transcribeSourceInChunks(sourcePath, workDir, durationSeconds, async (completed, total) => {
+    const progress = 50 + Math.round((completed / total) * 8);
+    await updateJob(job.id, "running", "transcribing", progress);
+    await updateVideo(video.id, "transcribing", progress, `Transcribing audio chunk ${completed} of ${total}.`);
+  });
 
   await updateJob(job.id, "running", "saving_transcript", 58);
   const transcriptId = await saveTranscript(video.id, transcript);
@@ -945,6 +943,68 @@ async function saveClipIdeas(videoId, ideas) {
   if (ideas.length === 0) return;
   const { error } = await supabase.from("clip_ideas").insert(ideas.map((idea) => clipIdeaInsertPayload(videoId, idea, "stream_scan_worker")));
   if (error) throw new Error(error.message);
+}
+
+async function probeMediaDuration(sourcePath) {
+  const { stdout } = await execFileAsync(ffprobeBinary, [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "default=noprint_wrappers=1:nokey=1",
+    sourcePath
+  ]);
+  const durationSeconds = Number(stdout.trim());
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error("FFprobe did not return a valid source duration.");
+  }
+  return durationSeconds;
+}
+
+async function transcribeSourceInChunks(sourcePath, workDir, durationSeconds, onProgress = async () => {}) {
+  const chunkPlan = buildAudioChunkPlan(durationSeconds);
+  if (chunkPlan.length === 0) throw new Error("Source video has no transcribable duration.");
+
+  const chunkDir = path.join(workDir, "audio-chunks");
+  const transcripts = [];
+  await mkdir(chunkDir, { recursive: true });
+
+  try {
+    for (const chunk of chunkPlan) {
+      const chunkPath = path.join(chunkDir, `chunk-${String(chunk.index).padStart(3, "0")}.mp3`);
+      try {
+        await execFileAsync(ffmpegBinary, [
+          "-y",
+          "-ss",
+          String(chunk.startSeconds),
+          "-i",
+          sourcePath,
+          "-t",
+          String(chunk.durationSeconds),
+          "-vn",
+          "-acodec",
+          "libmp3lame",
+          "-ar",
+          "16000",
+          "-ac",
+          "1",
+          "-b:a", "48k",
+          chunkPath
+        ]);
+        transcripts.push({
+          offsetSeconds: chunk.startSeconds,
+          transcript: await transcribeAudio(chunkPath)
+        });
+        await onProgress(chunk.index + 1, chunkPlan.length);
+      } finally {
+        await rm(chunkPath, { force: true });
+      }
+    }
+    return mergeVerboseTranscripts(transcripts);
+  } finally {
+    await rm(chunkDir, { recursive: true, force: true });
+  }
 }
 
 async function transcribeAudio(audioPath) {
