@@ -57,10 +57,12 @@ Each video uses a stable ID and a dedicated directory:
   <video-id>/
     original/
       source.<ext>
+      chat.json
     working/
       audio.mp3
       transcript-chunks/
       subtitles/
+      normalized-chat.json
     clips/
       <clip-id>/
         preview.mp4
@@ -76,28 +78,45 @@ Temporary files are removed after a successful stage. The original and ready cli
 ## Data Flow
 
 1. The local Claipper page checks `GET http://127.0.0.1:43120/health`.
-2. The operator selects a supported local video file.
-3. Claipper sends the file as a streamed multipart upload to the local agent. The browser does not create database records directly.
+2. The operator selects a supported local video file and may add a Kick chat JSON export.
+3. Claipper sends the video and optional chat JSON as a streamed multipart upload to the local agent. The browser does not create database records directly.
 4. The agent generates the video ID, writes the upload directly to `<video-id>/original`, creates the Supabase records, and returns the video ID to Claipper. Supabase receives `source_storage_provider = local` plus a relative source path.
 5. The agent validates the source with FFprobe and queues or starts analysis.
-6. FFmpeg extracts audio locally. Long audio is processed in bounded chunks so transcription requests remain within provider limits.
-7. The agent merges timestamped transcript chunks, runs Moment Finder, grounds and verifies candidates, and stores the results in Supabase.
-8. Claipper displays ranked moments and local previews.
-9. The operator approves a moment or changes supported edit settings.
-10. The agent renders the 9:16 clip locally, runs FFprobe quality checks, and exposes the result through a local media endpoint.
-11. Claipper displays and downloads the ready clip from the local agent. MyLaura and cloud delivery are later phases.
+6. The agent normalizes chat messages, converts absolute `createdAt` timestamps to video-relative seconds, extracts emotes, and removes repeated bot or promotional noise. The first chat timestamp is the default zero point; a manual `chat_offset_seconds` value can correct synchronization without rewriting the source JSON.
+7. FFmpeg extracts audio locally. Long audio is processed in bounded chunks so transcription requests remain within provider limits.
+8. The agent merges timestamped transcript chunks and adds bounded chat windows containing message velocity, unique-user count, emote spikes, and representative reactions.
+9. Moment Finder uses transcript evidence as the required grounding source and chat activity as a supporting ranking signal. It then grounds and verifies candidates and stores the results in Supabase.
+10. Claipper displays ranked moments and local previews.
+11. The operator approves a moment or changes supported edit settings.
+12. The agent renders the 9:16 clip locally, runs FFprobe quality checks, and exposes the result through a local media endpoint.
+13. Claipper displays and downloads the ready clip from the local agent. MyLaura and cloud delivery are later phases.
 
 ## Local API
 
 The initial API is intentionally small:
 
 - `GET /health` reports agent readiness and tool availability.
-- `POST /uploads` streams one manually selected video, creates its video ID, and returns that ID.
+- `POST /uploads` streams one manually selected video plus an optional Kick chat JSON file, creates the video ID, and returns that ID.
 - `GET /media/videos/:videoId/source` serves browser-compatible source playback when available.
 - `GET /media/clips/:clipId/:variant` serves preview or ready output.
 - `POST /clips/:clipId/render` accepts the existing constrained edit-plan schema and queues rerendering.
 
 The browser never submits arbitrary filesystem paths or shell arguments. IDs are validated as UUIDs, filenames are normalized, and FFmpeg continues to use argument arrays.
+
+## Kick Chat Format
+
+The presentation parser accepts the supplied array export shape:
+
+```json
+{
+  "content": "[emote:37226:KEKW]",
+  "createdAt": "2026-06-28T15:49:43Z",
+  "userId": 4434348,
+  "username": "viewer"
+}
+```
+
+It produces normalized records with `timestamp_seconds`, `username`, `message`, and extracted emote names. Invalid timestamps and empty messages are rejected. Repeated identical promotions, chat commands, and high-frequency messages from one user are suppressed before aggregation. Ranking considers activity from multiple unique users more strongly than repeated messages from one account. Raw usernames are not included in AI prompts unless required for understanding a reply.
 
 ## Browser Connectivity And Security
 
@@ -123,6 +142,7 @@ Included:
 
 - local Claipper upload, progress, review, and edit UI;
 - direct browser-to-local-agent upload;
+- optional Kick chat JSON upload and timeline synchronization;
 - local source validation and processing;
 - CZ/SK transcription and ranked moment detection;
 - local 9:16 preview and ready render;
@@ -147,6 +167,7 @@ Automated verification covers:
 
 - local-path validation and traversal prevention;
 - streamed upload behavior without buffering the whole video;
+- supplied Kick chat JSON parsing, emote extraction, spam suppression, aggregation, and offset correction;
 - CORS and local-agent authentication;
 - local provider metadata persistence;
 - job claiming and heartbeat behavior;
@@ -154,7 +175,7 @@ Automated verification covers:
 - edit-plan validation and rerender queueing;
 - existing unit tests, typecheck, lint, and production build.
 
-Codex does not upload or process a real video. The operator performs the final manual test from Claipper on the presentation Mac and verifies upload, progress, moment quality, preview, small edit, rerender, and playback.
+Codex does not upload or process a real video. The operator performs the final manual test from Claipper on the presentation Mac and verifies video plus chat upload, synchronization, progress, moment quality, preview, small edit, rerender, and playback.
 
 ## Later Production Migration
 
