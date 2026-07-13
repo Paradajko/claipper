@@ -26,6 +26,7 @@ import {
 import {
   assertValidWorkerEnv,
   checkBinaryAvailability,
+  checkFfmpegAvailability,
   formatStartupReport,
   loadWorkerDotEnv,
   retryOperation,
@@ -1799,7 +1800,7 @@ function sleep(ms) {
 
 async function startupChecks() {
   const [ffmpeg, ffprobe, ytdlp, supabaseConnected] = await Promise.all([
-    checkBinaryAvailability(ffmpegBinary, ["-version"]),
+    checkFfmpegAvailability(ffmpegBinary),
     checkBinaryAvailability(ffprobeBinary, ["-version"]),
     localMode
       ? Promise.resolve({ ok: true, binary: ytDlpBinary, version: null, chromeTarget: null, disabled: true })
@@ -1825,7 +1826,7 @@ async function startupChecks() {
 
   const missingRuntime = [];
   if (!supabaseConnected) missingRuntime.push("Supabase connection failed");
-  if (!ffmpeg.ok) missingRuntime.push(`FFmpeg unavailable at ${ffmpeg.binary}`);
+  if (!ffmpeg.ok) missingRuntime.push(ffmpeg.error ?? `FFmpeg unavailable at ${ffmpeg.binary}`);
   if (!ffprobe.ok) missingRuntime.push(`FFprobe unavailable at ${ffprobe.binary}`);
   if (!localMode && !ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
   else if (!localMode && !ytdlp.chromeTarget) missingRuntime.push("yt-dlp Chrome impersonation unavailable");

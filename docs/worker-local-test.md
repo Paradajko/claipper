@@ -7,7 +7,7 @@ Codex runs automated tests and starts the services, but does not upload or proce
 1. Fill `.env.local` using `.env.example`.
 2. Set a random `CLAIPPER_LOCAL_AGENT_TOKEN`.
 3. Ensure Supabase migrations `001_claipper_core.sql` through `007_atomic_ready_clip_queue.sql` are applied.
-4. Install FFmpeg with `brew install ffmpeg` if needed.
+4. Install the caption-capable FFmpeg build with `brew install ffmpeg-full` if needed.
 5. Keep the Railway worker deployment removed so it cannot claim local jobs. `npm run dev:local` reads its existing API credentials through `railway run`, but all media processing remains on the Mac.
 
 ## 2. Start

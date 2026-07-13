@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastSeen, formatStartupReport, isHeartbeatConnected, retryOperation, userFriendlyWorkerError, validateWorkerEnv } from "./worker-utils.mjs";
+import { formatLastSeen, formatStartupReport, hasFfmpegSubtitleFilter, isHeartbeatConnected, retryOperation, userFriendlyWorkerError, validateWorkerEnv } from "./worker-utils.mjs";
 
 const validEnv = {
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
@@ -83,6 +83,11 @@ describe("worker utils", () => {
     expect(report).toContain("FFprobe: available");
     expect(report).toContain("yt-dlp: missing (yt-dlp)");
     expect(report).toContain("Polling every 3000ms");
+  });
+
+  it("detects whether FFmpeg was built with subtitle rendering", () => {
+    expect(hasFfmpegSubtitleFilter(" .. subtitles        V->V       Render text subtitles using libass")).toBe(true);
+    expect(hasFfmpegSubtitleFilter(" .. overlay          VV->V      Overlay video")).toBe(false);
   });
 
   it("treats heartbeats older than 60 seconds as disconnected", () => {

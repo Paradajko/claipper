@@ -24,6 +24,14 @@ export function checkBinaryAvailability(binary: string, args?: string[]): Promis
   error?: string;
 }>;
 
+export function checkFfmpegAvailability(binary: string, options?: { requireSubtitles?: boolean }): Promise<{
+  ok: boolean;
+  binary: string;
+  error?: string;
+}>;
+
+export function hasFfmpegSubtitleFilter(output: string): boolean;
+
 export function formatStartupReport(input: {
   workerId: string;
   supabaseConnected: boolean;

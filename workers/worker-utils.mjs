@@ -76,6 +76,33 @@ export async function checkBinaryAvailability(binary, args = ["-version"]) {
   }
 }
 
+export async function checkFfmpegAvailability(binary, options = {}) {
+  const available = await checkBinaryAvailability(binary, ["-version"]);
+  if (!available.ok || options.requireSubtitles === false) return available;
+
+  try {
+    const { stdout, stderr } = await execFileAsync(binary, ["-hide_banner", "-filters"], { timeout: 8000 });
+    if (!hasFfmpegSubtitleFilter(`${stdout}\n${stderr}`)) {
+      return {
+        ok: false,
+        binary,
+        error: "FFmpeg subtitles filter is unavailable. Install ffmpeg-full with libass support."
+      };
+    }
+    return available;
+  } catch (error) {
+    return {
+      ok: false,
+      binary,
+      error: error instanceof Error ? error.message : "Could not inspect FFmpeg filters."
+    };
+  }
+}
+
+export function hasFfmpegSubtitleFilter(output) {
+  return /^\s*[.A-Z]{2,3}\s+subtitles\s+/m.test(String(output ?? ""));
+}
+
 export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment, storageMode = "cloud", localStorageRoot = null }) {
   return [
     "Claipper Stream Scan Worker",

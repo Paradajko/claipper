@@ -35,8 +35,8 @@ NEXT_PUBLIC_CLAIPPER_LOCAL_MAX_UPLOAD_SIZE_MB=20000
 
 WORKER_ID=claipper-mac
 WORKER_POLL_INTERVAL_MS=3000
-FFMPEG_PATH=ffmpeg
-FFPROBE_PATH=ffprobe
+FFMPEG_PATH=/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg
+FFPROBE_PATH=/opt/homebrew/opt/ffmpeg-full/bin/ffprobe
 APP_PASSWORD=
 ```
 
@@ -48,10 +48,10 @@ If the API credentials are filled directly in `.env.local`, `npm run dev:local:p
 
 ## Dependencies and database
 
-Install FFmpeg if it is not already available:
+Install the full FFmpeg build. Claipper requires its `libass`-backed `subtitles` filter for creator captions:
 
 ```bash
-brew install ffmpeg
+brew install ffmpeg-full
 npm install
 ```
 

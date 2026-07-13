@@ -125,9 +125,16 @@ export function buildAssDocument(words, timeline, options = {}) {
 export function buildReadyRenderCommand({ inputPath, outputPath, editPlan, timeline, assPath = null }) {
   const plan = normalizeEditPlan(editPlan, { legacy: true });
   const segments = timeline ?? buildRenderTimeline(plan);
+  const inputStart = Math.min(...segments.map((segment) => segment.start));
+  const inputEnd = Math.max(...segments.map((segment) => segment.end));
+  const relativeSegments = segments.map((segment) => ({
+    ...segment,
+    start: segment.start - inputStart,
+    end: segment.end - inputStart
+  }));
   const graphParts = [];
   const pairs = [];
-  segments.forEach((segment, index) => {
+  relativeSegments.forEach((segment, index) => {
     graphParts.push(`[0:v]trim=start=${segment.start}:end=${segment.end},setpts=PTS-STARTPTS[v${index}]`);
     graphParts.push(`[0:a]atrim=start=${segment.start}:end=${segment.end},asetpts=PTS-STARTPTS[a${index}]`);
     pairs.push(`[v${index}][a${index}]`);
@@ -151,7 +158,8 @@ export function buildReadyRenderCommand({ inputPath, outputPath, editPlan, timel
   return {
     expectedDuration,
     args: [
-      "-hide_banner", "-loglevel", "error", "-y", "-i", inputPath,
+      "-hide_banner", "-loglevel", "error", "-y", "-ss", String(inputStart), "-i", inputPath,
+      "-t", String(inputEnd - inputStart),
       "-filter_complex", graphParts.join(";"),
       "-map", "[outv]", "-map", "[outa]",
       "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",

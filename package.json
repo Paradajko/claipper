@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:local": "railway run npm run dev:local:processes",
-    "dev:local:processes": "WORKER_ID=claipper-mac concurrently --kill-others-on-fail --names web,agent,worker --prefix-colors cyan,green,yellow \"next dev -H 127.0.0.1 -p 3000\" \"npm:worker:local-agent\" \"npm:worker:stream-scan\"",
+    "dev:local:processes": "FFMPEG_PATH=/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg FFPROBE_PATH=/opt/homebrew/opt/ffmpeg-full/bin/ffprobe WORKER_ID=claipper-mac concurrently --kill-others-on-fail --names web,agent,worker --prefix-colors cyan,green,yellow \"next dev -H 127.0.0.1 -p 3000\" \"npm:worker:local-agent\" \"npm:worker:stream-scan\"",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",

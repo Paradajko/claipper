@@ -101,6 +101,24 @@ describe("video production", () => {
     });
     const graph = command.args.join(" ");
     for (const token of ["trim=", "atrim=", "setpts=", "asetpts=", "concat=n=3"]) expect(graph).toContain(token);
+    expect(command.args.indexOf("-ss")).toBeLessThan(command.args.indexOf("-i"));
+    expect(command.args).toContain("100");
+    expect(graph).toContain("trim=start=25:end=27");
+    expect(graph).toContain("trim=start=0:end=25");
+    expect(graph).not.toContain("trim=start=125");
+  });
+
+  it("seeks directly to a late natural clip before decoding", () => {
+    const command = buildReadyRenderCommand({
+      inputPath: "/tmp/source.mpg",
+      outputPath: "/tmp/output.mp4",
+      editPlan: { start_seconds: 6339, end_seconds: 6370, hook_mode: "natural" }
+    });
+    const graph = command.args.join(" ");
+
+    expect(command.args.slice(0, command.args.indexOf("-i"))).toEqual(expect.arrayContaining(["-ss", "6339"]));
+    expect(graph).toContain("trim=start=0:end=31");
+    expect(graph).not.toContain("trim=start=6339");
   });
 
   it("validates rendered video probe results", () => {

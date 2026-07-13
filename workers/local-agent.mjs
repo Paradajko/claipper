@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { buildLocalAgent } from "./local-agent-server.mjs";
-import { checkBinaryAvailability, loadWorkerDotEnv } from "./worker-utils.mjs";
+import { checkBinaryAvailability, checkFfmpegAvailability, loadWorkerDotEnv } from "./worker-utils.mjs";
 
 loadWorkerDotEnv();
 
@@ -27,7 +27,7 @@ const app = await buildLocalAgent({
   createUploadRecords,
   async toolChecks() {
     const [ffmpeg, ffprobe] = await Promise.all([
-      checkBinaryAvailability(process.env.FFMPEG_PATH ?? "ffmpeg", ["-version"]),
+      checkFfmpegAvailability(process.env.FFMPEG_PATH ?? "ffmpeg"),
       checkBinaryAvailability(process.env.FFPROBE_PATH ?? "ffprobe", ["-version"])
     ]);
     return { ffmpeg: ffmpeg.ok, ffprobe: ffprobe.ok, openai: Boolean(process.env.OPENAI_API_KEY) };
