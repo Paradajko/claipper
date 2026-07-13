@@ -103,4 +103,21 @@ describe("ready render worker contract", () => {
   it("cleans the large platform-import work directory after completion or failure", () => {
     expect(worker).toContain("await rm(workDir, { recursive: true, force: true })");
   });
+
+  it("uses local source paths directly and disables platform imports in local mode", () => {
+    expect(worker).toContain("CLAIPPER_STORAGE_MODE");
+    expect(worker).toContain("resolveLocalMediaPath");
+    expect(worker).toContain("sourcePathForVideo");
+    expect(worker).toContain('throw new Error("Platform imports are disabled in local mode.")');
+    expect(worker).toContain("if (!localSourcePath && !storedLocalSourcePath)");
+  });
+
+  it("persists local renders without a cloud media upload", () => {
+    expect(worker).toContain('const renderStorageBucket = localMode ? "local" : buckets.clips');
+    expect(worker).toContain("const renderStoragePath = localMode");
+    expect(worker).toContain("if (!localMode)");
+    expect(worker).toContain('rendered_by: localMode ? "local_worker" : "railway_worker"');
+    expect(worker).toContain("p_storage_bucket: renderStorageBucket");
+    expect(worker).toContain("p_storage_path: renderStoragePath");
+  });
 });

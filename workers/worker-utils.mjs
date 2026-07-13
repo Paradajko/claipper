@@ -1,19 +1,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import path from "node:path";
 
 const execFileAsync = promisify(execFile);
 
-export const requiredWorkerEnv = [
+const baseRequiredWorkerEnv = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "OPENAI_API_KEY",
-  "STORAGE_BUCKET_ORIGINALS",
-  "STORAGE_BUCKET_AUDIO",
-  "STORAGE_BUCKET_CLIPS",
   "WORKER_ID",
   "WORKER_POLL_INTERVAL_MS"
 ];
+
+const cloudStorageWorkerEnv = [
+  "STORAGE_BUCKET_ORIGINALS",
+  "STORAGE_BUCKET_AUDIO",
+  "STORAGE_BUCKET_CLIPS"
+];
+
+export const requiredWorkerEnv = [...baseRequiredWorkerEnv, ...cloudStorageWorkerEnv];
 
 export function loadWorkerDotEnv(cwd = process.cwd()) {
   for (const filename of [".env.local", ".env"]) {
@@ -22,18 +28,24 @@ export function loadWorkerDotEnv(cwd = process.cwd()) {
 }
 
 export function validateWorkerEnv(env = process.env) {
-  const missing = requiredWorkerEnv.filter((key) => !String(env[key] ?? "").trim());
+  const storageMode = env.CLAIPPER_STORAGE_MODE === "local" ? "local" : "cloud";
+  const modeRequired = storageMode === "local" ? ["CLAIPPER_LOCAL_STORAGE_DIR"] : cloudStorageWorkerEnv;
+  const missing = [...baseRequiredWorkerEnv, ...modeRequired].filter((key) => !String(env[key] ?? "").trim());
   const pollInterval = Number(env.WORKER_POLL_INTERVAL_MS);
   const invalid = [];
   if (env.WORKER_POLL_INTERVAL_MS && (!Number.isFinite(pollInterval) || pollInterval < 500)) {
     invalid.push("WORKER_POLL_INTERVAL_MS must be a number >= 500");
+  }
+  if (storageMode === "local" && env.CLAIPPER_LOCAL_STORAGE_DIR && !path.isAbsolute(env.CLAIPPER_LOCAL_STORAGE_DIR)) {
+    invalid.push("CLAIPPER_LOCAL_STORAGE_DIR must be an absolute path");
   }
 
   return {
     ok: missing.length === 0 && invalid.length === 0,
     missing,
     invalid,
-    pollIntervalMs: Number.isFinite(pollInterval) ? pollInterval : null
+    pollIntervalMs: Number.isFinite(pollInterval) ? pollInterval : null,
+    storageMode
   };
 }
 
@@ -64,7 +76,7 @@ export async function checkBinaryAvailability(binary, args = ["-version"]) {
   }
 }
 
-export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment }) {
+export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment, storageMode = "cloud", localStorageRoot = null }) {
   return [
     "Claipper Stream Scan Worker",
     `Worker ID: ${workerId}`,
@@ -72,12 +84,17 @@ export function formatStartupReport({ workerId, supabaseConnected, openAiPresent
     `OpenAI key: ${openAiPresent ? "present" : "missing"}`,
     `FFmpeg: ${ffmpeg.ok ? "available" : `missing (${ffmpeg.binary})`}`,
     `FFprobe: ${ffprobe.ok ? "available" : `missing (${ffprobe.binary})`}`,
-    `yt-dlp: ${ytdlp.ok ? `available${ytdlp.version ? ` (${ytdlp.version})` : ""}` : `missing (${ytdlp.binary})`}`,
-    `yt-dlp Chrome impersonation: ${ytdlp.chromeTarget ? `available (${ytdlp.chromeTarget})` : "missing"}`,
-    "Buckets:",
-    `- ${buckets.originals}`,
-    `- ${buckets.audio}`,
-    `- ${buckets.clips}`,
+    `Storage mode: ${storageMode}`,
+    ...(storageMode === "local"
+      ? [`Local storage: ${localStorageRoot}`, "yt-dlp: disabled (manual local uploads)"]
+      : [
+          `yt-dlp: ${ytdlp.ok ? `available${ytdlp.version ? ` (${ytdlp.version})` : ""}` : `missing (${ytdlp.binary})`}`,
+          `yt-dlp Chrome impersonation: ${ytdlp.chromeTarget ? `available (${ytdlp.chromeTarget})` : "missing"}`,
+          "Buckets:",
+          `- ${buckets.originals}`,
+          `- ${buckets.audio}`,
+          `- ${buckets.clips}`
+        ]),
     `Polling every ${pollIntervalMs}ms`,
     `Environment: ${environment}`
   ].join("\n");

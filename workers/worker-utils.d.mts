@@ -7,6 +7,7 @@ export function validateWorkerEnv(env?: Record<string, string | undefined>): {
   missing: string[];
   invalid: string[];
   pollIntervalMs: number | null;
+  storageMode: "local" | "cloud";
 };
 
 export function assertValidWorkerEnv(env?: Record<string, string | undefined>): {
@@ -14,6 +15,7 @@ export function assertValidWorkerEnv(env?: Record<string, string | undefined>): 
   missing: string[];
   invalid: string[];
   pollIntervalMs: number | null;
+  storageMode: "local" | "cloud";
 };
 
 export function checkBinaryAvailability(binary: string, args?: string[]): Promise<{
@@ -29,9 +31,11 @@ export function formatStartupReport(input: {
   ffmpeg: { ok: boolean; binary: string };
   ffprobe: { ok: boolean; binary: string };
   ytdlp: { ok: boolean; binary: string; version?: string | null; chromeTarget?: string | null };
-  buckets: { originals: string; audio: string; clips: string };
+  buckets: { originals?: string; audio?: string; clips?: string };
   pollIntervalMs: number;
   environment: string;
+  storageMode?: "local" | "cloud";
+  localStorageRoot?: string | null;
 }): string;
 
 export function isHeartbeatConnected(heartbeat: { last_seen_at?: string } | null, now?: Date, timeoutMs?: number): boolean;

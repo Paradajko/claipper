@@ -30,6 +30,39 @@ describe("worker utils", () => {
     expect(result.pollIntervalMs).toBe(3000);
   });
 
+  it("accepts local mode without cloud media buckets", () => {
+    const result = validateWorkerEnv({
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      OPENAI_API_KEY: "openai",
+      WORKER_ID: "mac-worker",
+      WORKER_POLL_INTERVAL_MS: "3000",
+      CLAIPPER_STORAGE_MODE: "local",
+      CLAIPPER_LOCAL_STORAGE_DIR: "/Users/operator/ClaipperStorage"
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.missing).not.toContain("STORAGE_BUCKET_ORIGINALS");
+    expect(result.missing).not.toContain("STORAGE_BUCKET_AUDIO");
+    expect(result.missing).not.toContain("STORAGE_BUCKET_CLIPS");
+    expect(result.storageMode).toBe("local");
+  });
+
+  it("requires an absolute local storage directory in local mode", () => {
+    const result = validateWorkerEnv({
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      OPENAI_API_KEY: "openai",
+      WORKER_ID: "mac-worker",
+      WORKER_POLL_INTERVAL_MS: "3000",
+      CLAIPPER_STORAGE_MODE: "local",
+      CLAIPPER_LOCAL_STORAGE_DIR: "relative/storage"
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.invalid).toContain("CLAIPPER_LOCAL_STORAGE_DIR must be an absolute path");
+  });
+
   it("formats a readable startup report", () => {
     const report = formatStartupReport({
       workerId: "local-worker",

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider, uploadOriginalVideo } from "./object-storage.mjs";
+import { localRelativePath, resolveLocalMediaPath } from "./local-storage.mjs";
 import {
   buildYtDlpDownloadArgs,
   createPlatformImportError,
@@ -48,6 +49,8 @@ const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS);
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ffprobeBinary = process.env.FFPROBE_PATH ?? "ffprobe";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
+const localMode = process.env.CLAIPPER_STORAGE_MODE === "local";
+const localStorageRoot = process.env.CLAIPPER_LOCAL_STORAGE_DIR ?? "";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
 const JOB_LEASE_TIMEOUT_MS = 120000;
@@ -160,6 +163,7 @@ async function recoverStaleWorkerJobs() {
 
 async function runJob(job) {
   if (job.job_type === "platform_import") {
+    if (localMode) throw new Error("Platform imports are disabled in local mode.");
     await processPlatformImport(job);
     return;
   }
@@ -251,11 +255,15 @@ async function processAnalyzeVideo(job, { localSourcePath = null, workDir: exist
   const sourceStoragePath = getVideoSourceStoragePath(video);
   if (!sourceStoragePath) throw new Error("Video is missing source storage path.");
 
-  const workDir = existingWorkDir ?? await makeWorkDir(job.video_id);
-  const sourcePath = localSourcePath ?? path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
+  const storedLocalSourcePath = sourcePathForVideo(video);
+  const workDir = existingWorkDir ?? (storedLocalSourcePath
+    ? resolveLocalMediaPath(localStorageRoot, localRelativePath(video.id, "working"))
+    : await makeWorkDir(job.video_id));
+  await mkdir(workDir, { recursive: true });
+  const sourcePath = localSourcePath ?? storedLocalSourcePath ?? path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
   const audioPath = path.join(workDir, "audio.mp3");
 
-  if (!localSourcePath) {
+  if (!localSourcePath && !storedLocalSourcePath) {
     await updateJob(job.id, "running", "downloading_source", 15);
     await downloadSourceVideo(video, sourcePath);
   }
@@ -264,9 +272,11 @@ async function processAnalyzeVideo(job, { localSourcePath = null, workDir: exist
   await updateVideo(video.id, "extracting_audio", 35, "Extracting audio with FFmpeg.");
   await execFileAsync(ffmpegBinary, ["-y", "-i", sourcePath, "-vn", "-acodec", "libmp3lame", "-ar", "16000", "-ac", "1", audioPath]);
 
-  const audioStoragePath = `${video.id}/audio.mp3`;
-  await updateJob(job.id, "running", "uploading_audio", 43);
-  await uploadFile(buckets.audio, audioStoragePath, audioPath, "audio/mpeg");
+  const audioStoragePath = localMode ? localRelativePath(video.id, "working", "audio.mp3") : `${video.id}/audio.mp3`;
+  if (!localMode) {
+    await updateJob(job.id, "running", "uploading_audio", 43);
+    await uploadFile(buckets.audio, audioStoragePath, audioPath, "audio/mpeg");
+  }
   await supabase.from("videos").update({ audio_path: audioStoragePath }).eq("id", video.id);
 
   await updateJob(job.id, "running", "transcribing", 50);
@@ -331,16 +341,26 @@ async function processRenderClip(job, { ready }) {
   const hasEditPlan = Boolean(clip.raw_data?.edit_plan);
   const renderClip = ready && !hasEditPlan ? await refineReadyClipTiming(video.id, clip) : clip;
 
-  const workDir = await makeWorkDir(video.id);
-  const sourcePath = path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
-  const outputPath = path.join(workDir, `${renderClip.id}.mp4`);
+  const storedLocalSourcePath = sourcePathForVideo(video);
+  const renderStorageBucket = localMode ? "local" : buckets.clips;
+  const renderStoragePath = localMode
+    ? localRelativePath(video.id, "clips", renderClip.id, ready ? "ready.mp4" : "preview.mp4")
+    : `${video.id}/${clip.id}/${workerProcessToken}.mp4`;
+  const workDir = localMode
+    ? resolveLocalMediaPath(localStorageRoot, localRelativePath(video.id, "clips", renderClip.id))
+    : await makeWorkDir(video.id);
+  await mkdir(workDir, { recursive: true });
+  const sourcePath = storedLocalSourcePath ?? path.join(workDir, `source${path.extname(sourceStoragePath) || ".mp4"}`);
+  const outputPath = localMode ? resolveLocalMediaPath(localStorageRoot, renderStoragePath) : path.join(workDir, `${renderClip.id}.mp4`);
   const duration = Math.max(1, Number(renderClip.end_seconds ?? 0) - Number(renderClip.start_seconds ?? 0));
   const renderLabel = ready ? "ready clip" : "draft";
   let qualityCheck = null;
 
-  await updateJob(job.id, "running", "downloading_source", 20);
   await supabase.from("clips").update({ render_status: "running" }).eq("id", renderClip.id);
-  await downloadSourceVideo(video, sourcePath);
+  if (!storedLocalSourcePath) {
+    await updateJob(job.id, "running", "downloading_source", 20);
+    await downloadSourceVideo(video, sourcePath);
+  }
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
@@ -354,7 +374,7 @@ async function processRenderClip(job, { ready }) {
       ? await loadTranscriptTiming(video.id, editPlan.start_seconds, editPlan.end_seconds)
       : { words: [], segments: [] };
     const captionItems = timing.words.length > 0 ? timing.words : timing.segments;
-    const assPath = captionItems.length > 0 ? path.join(workDir, `${renderClip.id}.ass`) : null;
+    const assPath = captionItems.length > 0 ? path.join(workDir, localMode ? "captions.ass" : `${renderClip.id}.ass`) : null;
     if (assPath) {
       const ass = buildAssDocument(captionItems, timeline, { width: 1080, height: 1920, preset: "creator" });
       await writeFile(assPath, ass, "utf8");
@@ -434,15 +454,16 @@ async function processRenderClip(job, { ready }) {
     }
   }
 
-  const storagePath = `${video.id}/${clip.id}/${workerProcessToken}.mp4`;
   await assertJobLease(job.id);
-  try {
-    await uploadFile(buckets.clips, storagePath, outputPath, "video/mp4");
-  } catch (error) {
-    if (ready && qualityCheck) {
-      throw renderFailureError(error, renderClip, qualityCheck, error);
+  if (!localMode) {
+    try {
+      await uploadFile(buckets.clips, renderStoragePath, outputPath, "video/mp4");
+    } catch (error) {
+      if (ready && qualityCheck) {
+        throw renderFailureError(error, renderClip, qualityCheck, error);
+      }
+      throw error;
     }
-    throw error;
   }
   await assertJobLease(job.id);
 
@@ -451,13 +472,13 @@ async function processRenderClip(job, { ready }) {
     p_worker_process_id: workerProcessId,
     p_clip_id: renderClip.id,
     p_clip_idea_id: renderClip.clip_idea_id ?? null,
-    p_storage_bucket: buckets.clips,
-    p_storage_path: storagePath,
+    p_storage_bucket: renderStorageBucket,
+    p_storage_path: renderStoragePath,
     p_clip_status: ready ? "ready" : renderClip.status,
     p_clip_raw_data: {
       ...(renderClip.raw_data ?? {}),
       render_type: ready ? "ready" : "draft",
-      rendered_by: "railway_worker",
+      rendered_by: localMode ? "local_worker" : "railway_worker",
       ...(ready ? { render_version: 2, quality_check: qualityCheck } : {})
     },
     p_idea_status: ready ? "rendered" : "drafted",
@@ -832,6 +853,10 @@ async function downloadSourceVideo(video, outputPath) {
   const storagePath = getVideoSourceStoragePath(video);
   if (!storagePath) throw new Error("Video is missing source storage path.");
 
+  if (provider === "local") {
+    throw new Error("Local source videos must be read directly from the configured storage root.");
+  }
+
   if (provider !== "supabase") {
     await downloadOriginalVideo({ provider, storagePath, outputPath });
     return;
@@ -842,7 +867,20 @@ async function downloadSourceVideo(video, outputPath) {
 }
 
 function getVideoSourceStorageProvider(video) {
-  return normalizeOriginalStorageProvider(video.source_storage_provider ?? video.raw_data?.source_storage_provider);
+  const provider = video.source_storage_provider ?? video.raw_data?.source_storage_provider;
+  if (provider === "local") return "local";
+  return normalizeOriginalStorageProvider(provider);
+}
+
+function sourcePathForVideo(video) {
+  const provider = getVideoSourceStorageProvider(video);
+  if (provider === "local") {
+    const storagePath = getVideoSourceStoragePath(video);
+    if (!storagePath) throw new Error("Local video is missing its source path.");
+    return resolveLocalMediaPath(localStorageRoot, storagePath);
+  }
+  if (localMode) throw new Error("Local worker requires a locally uploaded source video.");
+  return null;
 }
 
 function getVideoSourceStoragePath(video) {
@@ -1594,7 +1632,9 @@ async function startupChecks() {
   const [ffmpeg, ffprobe, ytdlp, supabaseConnected] = await Promise.all([
     checkBinaryAvailability(ffmpegBinary, ["-version"]),
     checkBinaryAvailability(ffprobeBinary, ["-version"]),
-    checkYtDlpRuntime(),
+    localMode
+      ? Promise.resolve({ ok: true, binary: ytDlpBinary, version: null, chromeTarget: null, disabled: true })
+      : checkYtDlpRuntime(),
     checkSupabaseConnection()
   ]);
 
@@ -1608,7 +1648,9 @@ async function startupChecks() {
       ytdlp,
       buckets,
       pollIntervalMs,
-      environment: process.env.NODE_ENV ?? "development"
+      environment: process.env.NODE_ENV ?? "development",
+      storageMode: localMode ? "local" : "cloud",
+      localStorageRoot: localMode ? localStorageRoot : null
     })
   );
 
@@ -1616,8 +1658,8 @@ async function startupChecks() {
   if (!supabaseConnected) missingRuntime.push("Supabase connection failed");
   if (!ffmpeg.ok) missingRuntime.push(`FFmpeg unavailable at ${ffmpeg.binary}`);
   if (!ffprobe.ok) missingRuntime.push(`FFprobe unavailable at ${ffprobe.binary}`);
-  if (!ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
-  else if (!ytdlp.chromeTarget) missingRuntime.push("yt-dlp Chrome impersonation unavailable");
+  if (!localMode && !ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
+  else if (!localMode && !ytdlp.chromeTarget) missingRuntime.push("yt-dlp Chrome impersonation unavailable");
   if (missingRuntime.length > 0) {
     throw new Error(`Worker startup checks failed:\n${missingRuntime.join("\n")}`);
   }
@@ -1667,6 +1709,8 @@ async function updateHeartbeat(status, currentJobId, currentStep) {
         ffmpeg: ffmpegBinary,
         ffprobe: ffprobeBinary,
         ytdlp: ytDlpBinary,
+        storage_mode: localMode ? "local" : "cloud",
+        local_storage_root: localMode ? localStorageRoot : null,
         poll_interval_ms: pollIntervalMs,
         environment: process.env.NODE_ENV ?? "development"
       },
