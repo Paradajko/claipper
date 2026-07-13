@@ -5,15 +5,15 @@
 
 ## Goal
 
-Run Claipper video ingestion and production on the operator's Mac while MyLaura remains the online product surface. For the presentation scope, MyLaura accepts a manually selected video, shows processing progress and clip candidates, and supports a small edit followed by rerendering. Link imports are out of scope.
+Run the complete Claipper presentation workflow on the operator's Mac. Claipper accepts a manually selected long video, shows processing progress and ranked clip candidates, renders polished vertical clips, and supports a small edit followed by rerendering. MyLaura integration and link imports are out of scope.
 
 No source video, extracted audio, subtitle file, or rendered clip is uploaded to Supabase Storage, R2, Railway, or another cloud object store. Supabase remains the shared metadata database and job queue.
 
 ## System Boundary
 
-### MyLaura
+### Claipper UI
 
-- Runs online and provides the upload, progress, review, and basic edit UI.
+- Runs locally in the existing Next.js application and provides the upload, progress, review, and basic edit UI.
 - Detects whether the local Claipper agent is available before enabling manual upload.
 - Sends the selected video directly from the browser to the local agent.
 - Reads durable job, transcript, moment, and clip metadata from Supabase.
@@ -46,7 +46,7 @@ Supabase Storage buckets are not used in this phase.
 
 - Railway worker is disabled to prevent two workers from claiming the same job.
 - R2 and generic S3 object storage are unused.
-- Platform link imports are disabled in the presentation UI and rejected by the local-agent API.
+- Platform link imports and MyLaura integration are disabled for this phase.
 
 ## Local Storage Layout
 
@@ -75,17 +75,17 @@ Temporary files are removed after a successful stage. The original and ready cli
 
 ## Data Flow
 
-1. The MyLaura page checks `GET http://127.0.0.1:43120/health`.
+1. The local Claipper page checks `GET http://127.0.0.1:43120/health`.
 2. The operator selects a supported local video file.
-3. MyLaura sends the file as a streamed multipart upload to the local agent. The browser does not create database records directly.
-4. The agent generates the video ID, writes the upload directly to `<video-id>/original`, creates the Supabase records, and returns the video ID to MyLaura. Supabase receives `source_storage_provider = local` plus a relative source path.
+3. Claipper sends the file as a streamed multipart upload to the local agent. The browser does not create database records directly.
+4. The agent generates the video ID, writes the upload directly to `<video-id>/original`, creates the Supabase records, and returns the video ID to Claipper. Supabase receives `source_storage_provider = local` plus a relative source path.
 5. The agent validates the source with FFprobe and queues or starts analysis.
 6. FFmpeg extracts audio locally. Long audio is processed in bounded chunks so transcription requests remain within provider limits.
 7. The agent merges timestamped transcript chunks, runs Moment Finder, grounds and verifies candidates, and stores the results in Supabase.
-8. MyLaura displays ranked moments and local previews.
+8. Claipper displays ranked moments and local previews.
 9. The operator approves a moment or changes supported edit settings.
 10. The agent renders the 9:16 clip locally, runs FFprobe quality checks, and exposes the result through a local media endpoint.
-11. MyLaura displays the ready clip from the local agent. Cloud delivery is a later phase.
+11. Claipper displays and downloads the ready clip from the local agent. MyLaura and cloud delivery are later phases.
 
 ## Local API
 
@@ -102,8 +102,8 @@ The browser never submits arbitrary filesystem paths or shell arguments. IDs are
 ## Browser Connectivity And Security
 
 - The agent binds to `127.0.0.1`, not the LAN interface.
-- CORS allows only configured MyLaura and local-development origins.
-- Requests require `X-Claipper-Agent-Token`. The same token is stored in the Mac environment and entered once into MyLaura on the presentation Mac, where it remains in browser-local storage rather than Supabase.
+- CORS allows only configured Claipper local-development origins.
+- Requests require `X-Claipper-Agent-Token`. The same token is stored in the Mac environment and entered once into Claipper on the presentation Mac, where it remains in browser-local storage rather than Supabase.
 - Health checks return no secrets or filesystem paths.
 - Private-network preflight requests are handled explicitly for the supported browser.
 - The presentation browser and local agent run on the same Mac.
@@ -121,18 +121,19 @@ The browser never submits arbitrary filesystem paths or shell arguments. IDs are
 
 Included:
 
-- manual video selection in MyLaura;
+- local Claipper upload, progress, review, and edit UI;
 - direct browser-to-local-agent upload;
 - local source validation and processing;
 - CZ/SK transcription and ranked moment detection;
 - local 9:16 preview and ready render;
 - captions and existing creator edit settings;
 - basic rerender after a small edit;
-- progress and errors visible in MyLaura.
+- progress and errors visible in Claipper.
 
 Excluded:
 
 - Kick, Twitch, YouTube, or other URL downloads;
+- MyLaura integration;
 - Railway processing;
 - R2 or Supabase media storage;
 - sharing local clips from another computer;
@@ -153,8 +154,8 @@ Automated verification covers:
 - edit-plan validation and rerender queueing;
 - existing unit tests, typecheck, lint, and production build.
 
-Codex does not upload or process a real video. The operator performs the final manual test from MyLaura on the presentation Mac and verifies upload, progress, moment quality, preview, small edit, rerender, and playback.
+Codex does not upload or process a real video. The operator performs the final manual test from Claipper on the presentation Mac and verifies upload, progress, moment quality, preview, small edit, rerender, and playback.
 
 ## Later Production Migration
 
-The local-agent interface keeps media storage behind a provider boundary. A later production phase can replace local paths with R2/S3 objects and move workers to managed compute without changing MyLaura's workflow concepts or Supabase metadata model.
+The local-agent interface keeps media storage behind a provider boundary. A later production phase can replace local paths with R2/S3 objects, move workers to managed compute, and integrate the workflow into MyLaura without changing the Supabase metadata model.
