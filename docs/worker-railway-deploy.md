@@ -39,7 +39,10 @@ If Railway UI asks for build settings:
 
 ## Required Environment Variables
 
-Before deployment, apply `supabase/migrations/006_r2_original_video_storage.sql`. The migration is idempotent and adds the source provider/path fields used by R2 originals.
+Before deployment, apply these migrations in order:
+
+1. `supabase/migrations/006_r2_original_video_storage.sql` adds the source provider/path fields used by R2 originals.
+2. `supabase/migrations/007_atomic_ready_clip_queue.sql` adds decimal clip timing and atomically creates ready clips with their render jobs.
 
 Set these on the Railway worker service:
 
@@ -59,6 +62,8 @@ OBJECT_STORAGE_BUCKET=...
 OBJECT_STORAGE_ACCESS_KEY_ID=...
 OBJECT_STORAGE_SECRET_ACCESS_KEY=...
 ```
+
+`WORKER_ID` identifies the Railway service in logs. Each process adds a unique claim token; active jobs refresh their fenced lease every 15 seconds, and jobs with no live lease for two minutes are safely returned to the queue.
 
 When originals are stored in R2, Railway must receive the same `OBJECT_STORAGE_*` values as Vercel. Keep access keys secret and never expose them to browser code.
 

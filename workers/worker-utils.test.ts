@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLastSeen, formatStartupReport, isHeartbeatConnected, userFriendlyWorkerError, validateWorkerEnv } from "./worker-utils.mjs";
+import { formatLastSeen, formatStartupReport, isHeartbeatConnected, retryOperation, userFriendlyWorkerError, validateWorkerEnv } from "./worker-utils.mjs";
 
 const validEnv = {
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
@@ -66,5 +66,19 @@ describe("worker utils", () => {
     expect(userFriendlyWorkerError(new Error("Ready clip QA failed: wrong_dimensions"))).toBe(
       "Rendered clip failed quality checks. Retry the render or review the source."
     );
+  });
+
+  it("retries transient persistence failures a bounded number of times", async () => {
+    let attempts = 0;
+    await expect(retryOperation(async () => {
+      attempts += 1;
+      if (attempts < 3) throw new Error("temporary database outage");
+      return "saved";
+    }, { attempts: 3, delayMs: 0 })).resolves.toBe("saved");
+    expect(attempts).toBe(3);
+
+    await expect(retryOperation(async () => {
+      throw new Error("still unavailable");
+    }, { attempts: 2, delayMs: 0 })).rejects.toThrow("still unavailable");
   });
 });

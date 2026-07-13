@@ -636,10 +636,10 @@ function momentV2Scores(idea: ClipIdea) {
     edit_difficulty: scoreFromRaw(rawScores.edit_difficulty, 50),
     recommendation: recommendationFromRaw(rawScores.recommendation),
     recut_suggestion: typeof rawScores.recut_suggestion === "string" ? rawScores.recut_suggestion.trim() : "",
-    source_quote: typeof rawScores.source_quote === "string" ? rawScores.source_quote.trim() : ""
-    ,hook_mode: rawScores.hook_mode === "cold_open" ? "cold_open" as const : "natural" as const
-    ,hook_start_seconds: typeof rawScores.hook_start_seconds === "number" ? rawScores.hook_start_seconds : null
-    ,hook_end_seconds: typeof rawScores.hook_end_seconds === "number" ? rawScores.hook_end_seconds : null
+    source_quote: typeof rawScores.source_quote === "string" ? rawScores.source_quote.trim() : "",
+    hook_mode: rawScores.hook_mode === "cold_open" ? "cold_open" as const : "natural" as const,
+    hook_start_seconds: typeof rawScores.hook_start_seconds === "number" ? rawScores.hook_start_seconds : null,
+    hook_end_seconds: typeof rawScores.hook_end_seconds === "number" ? rawScores.hook_end_seconds : null
   };
 }
 

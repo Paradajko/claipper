@@ -110,6 +110,23 @@ export function userFriendlyWorkerError(error) {
   return "Video processing failed. Try another file or format.";
 }
 
+export async function retryOperation(operation, options = {}) {
+  const attempts = Math.max(1, Math.floor(Number(options.attempts ?? 3)));
+  const delayMs = Math.max(0, Number(options.delayMs ?? 250));
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation(attempt);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function loadDotEnvFile(filepath) {
   if (!existsSync(filepath)) return;
   const content = readFileSync(filepath, "utf8");

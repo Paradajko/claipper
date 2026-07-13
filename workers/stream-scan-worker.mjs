@@ -11,6 +11,7 @@ import {
   buildAssDocument,
   buildReadyRenderCommand,
   buildRenderTimeline,
+  groundColdOpenHook,
   normalizeEditPlan,
   validateProbeResult
 } from "./video-production.mjs";
@@ -19,6 +20,7 @@ import {
   checkBinaryAvailability,
   formatStartupReport,
   loadWorkerDotEnv,
+  retryOperation,
   userFriendlyWorkerError
 } from "./worker-utils.mjs";
 
@@ -35,12 +37,15 @@ try {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const workerId = process.env.WORKER_ID;
+const workerProcessToken = randomUUID();
+const workerProcessId = `${workerId}:${workerProcessToken}`;
 const pollIntervalMs = Number(process.env.WORKER_POLL_INTERVAL_MS);
 const ffmpegBinary = process.env.FFMPEG_PATH ?? "ffmpeg";
 const ffprobeBinary = process.env.FFPROBE_PATH ?? "ffprobe";
 const ytDlpBinary = process.env.YTDLP_PATH ?? "yt-dlp";
 const READY_CLIP_MIN_SECONDS = 20;
 const READY_CLIP_MAX_SECONDS = 60;
+const JOB_LEASE_TIMEOUT_MS = 120000;
 const MOMENT_FINDER_VERSION = "v3";
 const CLIP_DIFFICULTIES = ["easy", "medium", "hard"];
 const CLIP_TYPES = ["funny", "reaction", "opinion", "educational", "hype", "story", "other"];
@@ -73,6 +78,7 @@ async function pollForever() {
 
   while (true) {
     await updateHeartbeat("online", activeJobId, activeStep);
+    await recoverStaleWorkerJobs();
     const claimed = await claimNextJob();
     if (claimed) {
       activeJobId = claimed.id;
@@ -103,7 +109,7 @@ async function claimNextJob() {
     .from("processing_jobs")
     .update({
       status: "running",
-      worker_id: workerId,
+      worker_id: workerProcessId,
       locked_at: new Date().toISOString(),
       started_at: new Date().toISOString(),
       attempts: (queued.attempts ?? 0) + 1,
@@ -118,6 +124,33 @@ async function claimNextJob() {
 
   if (claimError || !claimed) return null;
   return claimed;
+}
+
+async function recoverStaleWorkerJobs() {
+  const staleBefore = new Date(Date.now() - JOB_LEASE_TIMEOUT_MS).toISOString();
+  const { data: recovered, error } = await supabase
+    .from("processing_jobs")
+    .update({
+      status: "queued",
+      current_step: "recovered_after_worker_restart",
+      step: "recovered_after_worker_restart",
+      worker_id: null,
+      locked_at: null,
+      started_at: null,
+      error_message: null,
+      technical_error: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("status", "running")
+    .lt("locked_at", staleBefore)
+    .select("id");
+  if (error) {
+    console.error("[claipper-worker] stale job recovery failed", error.message);
+    return;
+  }
+  if (recovered?.length > 0) {
+    console.log(`[claipper-worker] recovered ${recovered.length} interrupted job(s)`);
+  }
 }
 
 async function runJob(job) {
@@ -218,6 +251,7 @@ async function processAnalyzeVideo(job) {
   await updateJob(job.id, "running", "segmenting", 62);
   await updateVideo(video.id, "segmenting", 62, "Splitting transcript into 5-10 minute chunks.");
   const transcriptItems = toTranscriptItems(transcript);
+  const transcriptWords = toTranscriptWords(transcript);
   const segments = buildOverlappingTranscriptSegments(transcriptItems, 600, 120);
   await saveTranscriptSegments(video.id, transcriptId, segments);
 
@@ -235,7 +269,7 @@ async function processAnalyzeVideo(job) {
   const grounded = ranked.map((candidate) => groundClipCandidate(candidate, transcriptItems));
   const refined = grounded.map((candidate) => refineFinalMomentTiming(candidate, transcriptItems));
   const verified = [];
-  for (const candidate of refined) verified.push(await verifyCandidateTiming(candidate, transcriptItems));
+  for (const candidate of refined) verified.push(await verifyCandidateTiming(candidate, transcriptItems, transcriptWords));
   console.log(`[claipper-worker] moment_finder_version=${MOMENT_FINDER_VERSION} final ranked candidates: ${verified.length}`);
   for (const [index, moment] of verified.entries()) {
     const overlappingPreview = extractSourceQuote(transcriptItems, moment.start_time, moment.end_time).slice(0, 260);
@@ -282,9 +316,10 @@ async function processRenderClip(job, { ready }) {
 
   await updateJob(job.id, "running", ready ? "rendering_ready_clip" : "rendering_draft", 65);
   if (ready) {
+    const storedEditPlan = renderClip.raw_data?.edit_plan;
     const editPlan = normalizeEditPlan(
-      renderClip.raw_data?.edit_plan ?? legacyEditPlan(renderClip, job),
-      { legacy: true }
+      storedEditPlan ?? legacyEditPlan(renderClip, job),
+      { legacy: !storedEditPlan || storedEditPlan.version !== 1 }
     );
     const timeline = buildRenderTimeline(editPlan);
     const timing = editPlan.add_captions
@@ -318,15 +353,21 @@ async function processRenderClip(job, { ready }) {
         checked_at: new Date().toISOString(),
         details: { errors: ["ffprobe_error"], technical_error: cleanError(error) }
       };
-      await saveFailedQualityCheck(renderClip, qualityCheck);
-      throw new Error(`Ready clip QA failed: ffprobe_error: ${cleanError(error)}`);
+      throw renderFailureError(
+        new Error(`Ready clip QA failed: ffprobe_error: ${cleanError(error)}`),
+        renderClip,
+        qualityCheck
+      );
     }
     const validation = validateProbeResult(probe, { width: 1080, height: 1920, duration: command.expectedDuration });
     const details = summarizeProbeResult(probe, command.expectedDuration, validation.errors);
     if (!validation.ok) {
       qualityCheck = { status: "failed", checked_at: new Date().toISOString(), details };
-      await saveFailedQualityCheck(renderClip, qualityCheck);
-      throw new Error(`Ready clip QA failed: ${validation.errors.join(", ")}`);
+      throw renderFailureError(
+        new Error(`Ready clip QA failed: ${validation.errors.join(", ")}`),
+        renderClip,
+        qualityCheck
+      );
     }
     qualityCheck = { status: "passed", checked_at: new Date().toISOString(), details };
   } else {
@@ -365,46 +406,41 @@ async function processRenderClip(job, { ready }) {
     }
   }
 
-  const storagePath = `${video.id}/${clip.id}.mp4`;
+  const storagePath = `${video.id}/${clip.id}/${workerProcessToken}.mp4`;
+  await assertJobLease(job.id);
   try {
     await uploadFile(buckets.clips, storagePath, outputPath, "video/mp4");
   } catch (error) {
     if (ready && qualityCheck) {
-      await saveFailedQualityCheck(renderClip, qualityCheck, error);
+      throw renderFailureError(error, renderClip, qualityCheck, error);
     }
     throw error;
   }
-  const { error: clipUpdateError } = await supabase
-    .from("clips")
-    .update({
-      storage_bucket: buckets.clips,
-      storage_path: storagePath,
-      file_path: storagePath,
-      render_status: "completed",
-      status: ready ? "ready" : renderClip.status,
-      exported_video_url: null,
-      raw_data: {
-        ...(renderClip.raw_data ?? {}),
-        render_type: ready ? "ready" : "draft",
-        rendered_by: "railway_worker",
-        ...(ready ? { render_version: 2, quality_check: qualityCheck } : {})
-      },
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", renderClip.id);
-  if (clipUpdateError) throw new Error(`Could not save rendered clip: ${clipUpdateError.message}`);
+  await assertJobLease(job.id);
 
-  if (renderClip.clip_idea_id) {
-    const { error: ideaUpdateError } = await supabase
-      .from("clip_ideas")
-      .update({ status: ready ? "rendered" : "drafted" })
-      .eq("id", renderClip.clip_idea_id);
-    if (ideaUpdateError) throw new Error(`Could not update clip idea after render: ${ideaUpdateError.message}`);
-  }
-  await updateJob(job.id, "completed", `${renderLabel}_completed`, 100);
+  const { data: completed, error: completionError } = await supabase.rpc("complete_render_job", {
+    p_job_id: job.id,
+    p_worker_process_id: workerProcessId,
+    p_clip_id: renderClip.id,
+    p_clip_idea_id: renderClip.clip_idea_id ?? null,
+    p_storage_bucket: buckets.clips,
+    p_storage_path: storagePath,
+    p_clip_status: ready ? "ready" : renderClip.status,
+    p_clip_raw_data: {
+      ...(renderClip.raw_data ?? {}),
+      render_type: ready ? "ready" : "draft",
+      rendered_by: "railway_worker",
+      ...(ready ? { render_version: 2, quality_check: qualityCheck } : {})
+    },
+    p_idea_status: ready ? "rendered" : "drafted",
+    p_job_step: `${renderLabel}_completed`
+  });
+  if (completionError) throw new Error(`Could not complete render job: ${completionError.message}`);
+  if (!completed) throw new Error(`Worker lease lost for job ${job.id}.`);
 }
 
-async function saveFailedQualityCheck(clip, qualityCheck, renderError = null) {
+function renderFailureError(error, clip, qualityCheck, renderError = null) {
+  const failure = error instanceof Error ? error : new Error(cleanError(error));
   const renderFailure = renderError
     ? {
         stage: "uploading_render",
@@ -413,21 +449,13 @@ async function saveFailedQualityCheck(clip, qualityCheck, renderError = null) {
         failed_at: new Date().toISOString()
       }
     : null;
-  const { error: failedQualityUpdateError } = await supabase
-    .from("clips")
-    .update({
-      render_status: "failed",
-      status: "editing",
-      raw_data: {
-        ...(clip.raw_data ?? {}),
-        render_version: 2,
-        quality_check: qualityCheck,
-        ...(renderFailure ? { render_failure: renderFailure } : {})
-      },
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", clip.id);
-  if (failedQualityUpdateError) throw new Error(`Could not save failed render state: ${failedQualityUpdateError.message}`);
+  failure.renderFailureRawData = {
+    ...(clip.raw_data ?? {}),
+    render_version: 2,
+    quality_check: qualityCheck,
+    ...(renderFailure ? { render_failure: renderFailure } : {})
+  };
+  return failure;
 }
 
 async function refineReadyClipTiming(videoId, clip) {
@@ -694,7 +722,7 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
   if (status === "completed") timestamps.completed_at = new Date().toISOString();
   if (status === "failed") timestamps.failed_at = new Date().toISOString();
 
-  await supabase
+  const { data: updatedJob, error: jobUpdateError } = await supabase
     .from("processing_jobs")
     .update({
       status,
@@ -705,7 +733,13 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
       ...timestamps,
       updated_at: new Date().toISOString()
     })
-    .eq("id", jobId);
+    .eq("id", jobId)
+    .eq("status", "running")
+    .eq("worker_id", workerProcessId)
+    .select("id")
+    .maybeSingle();
+  if (jobUpdateError) throw new Error(`Could not update processing job: ${jobUpdateError.message}`);
+  if (!updatedJob) throw new Error(`Worker lease lost for job ${jobId}.`);
 }
 
 async function failJob(job, error) {
@@ -713,26 +747,50 @@ async function failJob(job, error) {
   const userError = userFriendlyWorkerError(error);
   console.error(`[claipper-worker] job ${job.id} failed`, technicalError);
   activeStep = "failed";
-  await supabase
-    .from("processing_jobs")
-    .update({
-      status: "failed",
-      current_step: "failed",
-      step: "failed",
-      progress_percent: job.progress_percent ?? 0,
-      error_message: userError,
-      technical_error: technicalError,
-      failed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", job.id);
-  if (job.video_id) {
+  const isRenderJob = job.job_type === "render_draft" || job.job_type === "render_ready_clip";
+  let failureOwned = false;
+  try {
+    failureOwned = await retryOperation(() => persistFailedJobState(job, userError, technicalError, error), { attempts: 3, delayMs: 1000 });
+  } catch (persistenceError) {
+    console.error(`[claipper-worker] job ${job.id} failure state could not be persisted after retries`, cleanError(persistenceError));
+  }
+  if (failureOwned && !isRenderJob && job.video_id) {
     await updateVideo(job.video_id, "failed", 100, userError, technicalError);
   }
-  if (job.clip_id) {
-    await supabase.from("clips").update({ render_status: "failed", updated_at: new Date().toISOString() }).eq("id", job.clip_id);
-  }
   await updateHeartbeat("online", null, "failed");
+}
+
+async function persistFailedJobState(job, userError, technicalError, error) {
+  const { data: failed, error: failureError } = await supabase.rpc("fail_processing_job", {
+    p_job_id: job.id,
+    p_worker_process_id: workerProcessId,
+    p_clip_id: job.clip_id ?? null,
+    p_clip_idea_id: job.clip_idea_id ?? null,
+    p_user_error: userError,
+    p_technical_error: technicalError,
+    p_progress_percent: job.progress_percent ?? 0,
+    p_clip_raw_data: error?.renderFailureRawData ?? null
+  });
+  if (failureError) throw new Error(`Could not persist failed job state: ${failureError.message}`);
+  return Boolean(failed);
+}
+
+async function refreshJobLease(jobId) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("processing_jobs")
+    .update({ locked_at: now, updated_at: now })
+    .eq("id", jobId)
+    .eq("status", "running")
+    .eq("worker_id", workerProcessId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`Could not refresh worker lease: ${error.message}`);
+  return Boolean(data);
+}
+
+async function assertJobLease(jobId) {
+  if (!(await refreshJobLease(jobId))) throw new Error(`Worker lease lost for job ${jobId}.`);
 }
 
 async function makeWorkDir(id) {
@@ -902,7 +960,7 @@ async function rankCandidatesWithAi(candidates) {
   return locallyRanked;
 }
 
-async function verifyCandidateTiming(candidate, transcriptItems) {
+async function verifyCandidateTiming(candidate, transcriptItems, transcriptWords = []) {
   const fallback = { ...candidate, hook_mode: "natural", hook_start_time: null, hook_end_time: null };
   const context = transcriptItems.filter(
     (item) => item.end > candidate.start_time - 20 && item.start < candidate.end_time + 20
@@ -936,14 +994,14 @@ async function verifyCandidateTiming(candidate, transcriptItems) {
     const end = nearestTranscriptBoundary(Number(value.end_seconds), context.map((item) => item.end));
     if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < 20 || end - start > 60) return fallback;
 
-    const hook = normalizeNumericHookBounds(value, start, end);
-    return {
+    const hook = normalizeVerifiedHookBounds(value, start, end, transcriptWords);
+    const grounded = groundVerifiedCandidate({
       ...candidate,
       start_time: start,
       end_time: end,
-      source_quote: extractSourceQuote(transcriptItems, start, end) || candidate.source_quote,
       ...hook
-    };
+    }, transcriptItems);
+    return groundColdOpenHook(grounded, transcriptWords);
   } catch {
     return fallback;
   }
@@ -969,6 +1027,16 @@ function toTranscriptItems(transcript) {
   }
   const text = String(transcript.text ?? "").trim();
   return text ? [{ start: 0, end: 600, text }] : [];
+}
+
+function toTranscriptWords(transcript) {
+  return (transcript.words ?? [])
+    .map((word) => ({
+      start: Number(word.start ?? 0),
+      end: Number(word.end ?? word.start ?? 0),
+      text: String(word.word ?? word.text ?? "").trim()
+    }))
+    .filter((word) => Number.isFinite(word.start) && Number.isFinite(word.end) && word.end > word.start && word.text.length > 0);
 }
 
 function buildOverlappingTranscriptSegments(items, windowSeconds = 600, overlapSeconds = 120) {
@@ -1126,6 +1194,25 @@ function groundClipCandidate(candidate, items) {
     recommendation: candidate.recommendation === "skip" ? "skip" : "maybe",
     recut_suggestion: fallbackQuote ? "Metadata was rewritten to match the selected timestamp." : candidate.recut_suggestion,
     source_quote: fallbackQuote
+  };
+}
+
+function groundVerifiedCandidate(candidate, items) {
+  const sourceQuote = extractSourceQuote(items, candidate.start_time, candidate.end_time) || candidate.source_quote;
+  if (metadataMatchesQuote(candidate, sourceQuote)) {
+    return { ...candidate, source_quote: sourceQuote };
+  }
+
+  const groundedText = sourceQuote.slice(0, 180);
+  return {
+    ...candidate,
+    title: titleFromQuote(sourceQuote),
+    reason: "Verified timing was grounded to the overlapping transcript text.",
+    hook: groundedText,
+    caption: groundedText,
+    recommendation: candidate.recommendation === "export" ? "maybe" : candidate.recommendation,
+    recut_suggestion: sourceQuote ? "Metadata was rewritten to match the verified timestamp." : candidate.recut_suggestion,
+    source_quote: sourceQuote
   };
 }
 
@@ -1430,6 +1517,27 @@ function normalizeNumericHookBounds(value, candidateStart, candidateEnd) {
   return { hook_mode: "cold_open", hook_start_time: hookStart, hook_end_time: hookEnd };
 }
 
+function normalizeVerifiedHookBounds(value, candidateStart, candidateEnd, transcriptWords) {
+  const numeric = normalizeNumericHookBounds(value, candidateStart, candidateEnd);
+  if (numeric.hook_mode !== "cold_open") return numeric;
+
+  const overlappingWords = transcriptWords.filter(
+    (word) => word.end > numeric.hook_start_time && word.start < numeric.hook_end_time &&
+      word.end > candidateStart && word.start < candidateEnd
+  );
+  if (overlappingWords.length === 0) {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+
+  const hookStart = Math.max(candidateStart, overlappingWords[0].start);
+  const hookEnd = Math.min(candidateEnd, overlappingWords.at(-1).end);
+  const duration = hookEnd - hookStart;
+  if (duration < 1 || duration > 3) {
+    return { hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+  return { hook_mode: "cold_open", hook_start_time: hookStart, hook_end_time: hookEnd };
+}
+
 function parseTimestampToSeconds(timestamp) {
   const parts = timestamp.split(":").map((part) => Number(part));
   if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) return 0;
@@ -1493,6 +1601,15 @@ async function checkSupabaseConnection() {
 
 async function updateHeartbeat(status, currentJobId, currentStep) {
   const now = new Date().toISOString();
+  if (currentJobId) {
+    try {
+      if (!(await refreshJobLease(currentJobId))) {
+        console.error(`[claipper-worker] job lease lost for ${currentJobId}`);
+      }
+    } catch (leaseError) {
+      console.error("[claipper-worker] job lease refresh failed", cleanError(leaseError));
+    }
+  }
   const { error } = await supabase.from("worker_heartbeats").upsert(
     {
       worker_id: workerId,

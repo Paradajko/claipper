@@ -1,30 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { storageBuckets } from "@/lib/stream-scan-config";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { editPlanSchema, isGroundedReadyClipTiming } from "./ready-clip-validation";
 
 export const runtime = "nodejs";
-
-const optionalNumber = z.preprocess(
-  (value) => value === "" || value === null ? undefined : value,
-  z.coerce.number().optional()
-);
-const formBoolean = z.preprocess(
-  (value) => value === true || value === "true" || value === "on",
-  z.boolean()
-);
-const editPlanSchema = z.object({
-  startSeconds: z.coerce.number().min(0),
-  endSeconds: z.coerce.number().positive(),
-  hookMode: z.enum(["natural", "cold_open"]).default("natural"),
-  hookStartSeconds: optionalNumber,
-  hookEndSeconds: optionalNumber,
-  framingMode: z.enum(["left", "center", "right"]).default("center"),
-  backgroundMode: z.enum(["crop", "blur"]).default("crop"),
-  subtitlePreset: z.literal("creator").default("creator"),
-  addCaptions: formBoolean,
-  enhanceEnabled: formBoolean
-});
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -61,26 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const parsed = parsedResult.data;
-  const duration = parsed.endSeconds - parsed.startSeconds;
-  const allowedStart = Math.max(0, Number(idea.start_time) - 20);
-  const allowedEnd = Number(idea.end_time) + 20;
-  const coldOpenDuration = (parsed.hookEndSeconds ?? 0) - (parsed.hookStartSeconds ?? 0);
-  const coldOpenValid =
-    parsed.hookMode === "natural" ||
-    (parsed.hookStartSeconds !== undefined &&
-      parsed.hookEndSeconds !== undefined &&
-      parsed.hookStartSeconds >= parsed.startSeconds &&
-      parsed.hookEndSeconds <= parsed.endSeconds &&
-      coldOpenDuration >= 1 &&
-      coldOpenDuration <= 3);
-  if (
-    duration <= 0 ||
-    duration < 20 ||
-    duration > 60 ||
-    parsed.startSeconds < allowedStart ||
-    parsed.endSeconds > allowedEnd ||
-    !coldOpenValid
-  ) {
+  if (!isGroundedReadyClipTiming(parsed, Number(idea.start_time), Number(idea.end_time))) {
     return NextResponse.json({ error: "Ready clip timing is outside the grounded moment range." }, { status: 400 });
   }
 
@@ -99,53 +59,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     enhance_enabled: parsed.enhanceEnabled
   };
 
-  const { data: clip, error: clipError } = await supabase
-    .from("clips")
-    .insert({
-      video_id: idea.video_id,
-      clip_idea_id: idea.id,
-      title: idea.title,
-      start_seconds: editPlan.start_seconds,
-      end_seconds: editPlan.end_seconds,
-      duration_seconds: editPlan.end_seconds - editPlan.start_seconds,
-      hook: idea.hook,
-      caption: idea.caption,
-      content_type: idea.clip_type,
-      score: idea.score,
-      status: "editing",
-      render_status: "queued",
-      type: "ready",
-      storage_bucket: storageBuckets.clips,
-      raw_data: {
-        created_from: "clip_idea",
-        render_requested_at: new Date().toISOString(),
-        target_aspect_ratio: "9:16",
-        add_captions: addCaptions,
-        add_hook_overlay: false,
-        edit_plan: editPlan
-      }
+  const clipRawData = {
+    created_from: "clip_idea",
+    render_requested_at: new Date().toISOString(),
+    target_aspect_ratio: "9:16",
+    add_captions: addCaptions,
+    add_hook_overlay: false,
+    edit_plan: editPlan
+  };
+  const jobRawData = { add_captions: addCaptions, add_hook_overlay: false, edit_plan: editPlan };
+  const { error: queueError } = await supabase
+    .rpc("queue_ready_clip_render", {
+      p_video_id: idea.video_id,
+      p_clip_idea_id: idea.id,
+      p_title: idea.title,
+      p_start_seconds: editPlan.start_seconds,
+      p_end_seconds: editPlan.end_seconds,
+      p_hook: idea.hook,
+      p_caption: idea.caption,
+      p_content_type: idea.clip_type,
+      p_score: idea.score,
+      p_storage_bucket: storageBuckets.clips,
+      p_clip_raw_data: clipRawData,
+      p_job_raw_data: jobRawData
     })
-    .select("id")
     .single();
 
-  if (clipError || !clip) {
-    return redirectWithError(request, `/app/content-lab/${idea.video_id}`, clipError?.message ?? "Could not create ready clip record.");
-  }
-
-  const { error: jobError } = await supabase.from("processing_jobs").insert({
-    video_id: idea.video_id,
-    clip_idea_id: idea.id,
-    clip_id: clip.id,
-    job_type: "render_ready_clip",
-    status: "queued",
-    progress_percent: 0,
-    current_step: "queued",
-    step: "queued",
-    raw_data: { add_captions: addCaptions, add_hook_overlay: false, edit_plan: editPlan }
-  });
-
-  if (jobError) {
-    return redirectWithError(request, `/app/content-lab/${idea.video_id}`, jobError.message);
+  if (queueError) {
+    return redirectWithError(request, `/app/content-lab/${idea.video_id}`, queueError.message);
   }
 
   return NextResponse.redirect(new URL(`/app/content-lab/${idea.video_id}`, request.url), { status: 303 });

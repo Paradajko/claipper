@@ -8,10 +8,16 @@ export async function middleware(request: NextRequest) {
   if (!password) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
-  if (pathname !== "/app" && !pathname.startsWith("/app/")) return NextResponse.next();
+  const isAppRoute = pathname === "/app" || pathname.startsWith("/app/");
+  const isStreamScanApi = pathname === "/api/stream-scan" || pathname.startsWith("/api/stream-scan/");
+  if (!isAppRoute && !isStreamScanApi) return NextResponse.next();
 
   const token = request.cookies.get(cookieName)?.value;
   if (token === await signPassword(password)) return NextResponse.next();
+
+  if (isStreamScanApi) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const url = request.nextUrl.clone();
   url.pathname = "/login";
@@ -20,5 +26,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!.*\\..*).*)"]
+  matcher: ["/app/:path*", "/api/stream-scan/:path*"]
 };

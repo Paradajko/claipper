@@ -3,6 +3,7 @@ import {
   buildAssDocument,
   buildReadyRenderCommand,
   buildRenderTimeline,
+  groundColdOpenHook,
   normalizeEditPlan,
   validateProbeResult
 } from "./video-production.mjs";
@@ -33,6 +34,33 @@ describe("video production", () => {
     expect(ass).toContain("MarginL,MarginR,MarginV,Encoding");
     expect(ass).toContain(",80,80,260,1");
     expect(ass).toContain("\\1c&H00FFFF&");
+  });
+
+  it("orders cold-open captions by output time and clips words at splice boundaries", () => {
+    const ass = buildAssDocument([
+      { start: 100.2, end: 100.8, text: "Body" },
+      { start: 124.9, end: 125.1, text: "Boundary" },
+      { start: 125.2, end: 125.8, text: "Hook" }
+    ], [
+      { role: "hook", start: 125, end: 127 },
+      { role: "body", start: 100, end: 125 },
+      { role: "body", start: 127, end: 140 }
+    ]);
+    const dialogues = ass
+      .split("\n")
+      .filter((line) => line.startsWith("Dialogue:"));
+    const dialogueTimes = dialogues.map((line) => line.split(",").slice(1, 3));
+
+    expect(dialogueTimes).toEqual([
+      ["0:00:00.00", "0:00:00.10"],
+      ["0:00:00.20", "0:00:00.80"],
+      ["0:00:02.20", "0:00:02.80"],
+      ["0:00:26.90", "0:00:27.00"]
+    ]);
+    expect(dialogues[0]).toContain("Hook");
+    expect(dialogues[0]).not.toContain("Body");
+    expect(dialogues[2]).toContain("Body");
+    expect(dialogues[2]).not.toContain("Hook");
   });
 
   it("builds distinct framing graphs and production output settings", () => {
@@ -126,6 +154,47 @@ describe("video production", () => {
       hook_mode: "natural",
       hook_start_seconds: null,
       hook_end_seconds: null
+    });
+  });
+
+  it("rejects malformed current edit plans instead of silently changing them", () => {
+    const currentPlan = {
+      version: 1,
+      start_seconds: 100,
+      end_seconds: 140,
+      hook_mode: "natural",
+      hook_start_seconds: null,
+      hook_end_seconds: null,
+      framing_mode: "center",
+      background_mode: "crop",
+      subtitle_preset: "creator",
+      add_captions: true,
+      enhance_enabled: true
+    };
+
+    expect(() => normalizeEditPlan({ ...currentPlan, hook_mode: "surprise" } as never)).toThrow("hook mode");
+    expect(() => normalizeEditPlan({ ...currentPlan, framing_mode: "top" } as never)).toThrow("framing mode");
+    expect(() => normalizeEditPlan({ ...currentPlan, background_mode: "neon" } as never)).toThrow("background mode");
+    expect(() => normalizeEditPlan({ ...currentPlan, add_captions: "yes" } as never)).toThrow("caption setting");
+  });
+
+  it("grounds cold-open hook text only to words inside its verified interval", () => {
+    const candidate = {
+      hook_mode: "cold_open" as const,
+      hook_start_time: 125,
+      hook_end_time: 127,
+      hook: "A claim from the body of the clip"
+    };
+    const words = [
+      { start: 110, end: 111, text: "Body claim" },
+      { start: 125, end: 125.7, text: "Toto" },
+      { start: 125.7, end: 126.4, text: "je hook" },
+      { start: 130, end: 131, text: "Later payoff" }
+    ];
+
+    expect(groundColdOpenHook(candidate, words)).toMatchObject({
+      hook_mode: "cold_open",
+      hook: "Toto je hook"
     });
   });
 });

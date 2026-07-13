@@ -87,7 +87,7 @@ function NumberField({ defaultValue, disabled, label, name }: { defaultValue: nu
   return (
     <label className="grid gap-1.5">
       <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</span>
-      <input type="number" step="0.1" min="0" name={name} defaultValue={defaultValue} disabled={disabled} className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none focus:border-emerald-300/50 disabled:opacity-60" />
+      <input type="number" step="0.1" min="0" name={name} defaultValue={defaultValue} disabled={disabled} required className="h-10 min-w-0 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none focus:border-emerald-300/50 disabled:opacity-60" />
     </label>
   );
 }

@@ -135,12 +135,36 @@ describe("AI-first app workflow naming", () => {
     expect(readyRoute).toContain("edit_plan");
     expect(readyRoute).toContain("add_captions: addCaptions");
     expect(readyRoute).toContain("add_hook_overlay: false");
-    expect(readyRoute).toContain('job_type: "render_ready_clip"');
-    expect(readyRoute).toContain('type: "ready"');
+    expect(readyRoute).toContain('.rpc("queue_ready_clip_render"');
     expect(readyRoute).toContain("storageBuckets.clips");
     expect(worker).toContain("editPlan.add_captions");
     expect(worker).toContain("loadTranscriptTiming");
     expect(worker).toContain("buildAssDocument");
+  });
+
+  it("rejects empty timing values and cold-open body fragments below 250ms", () => {
+    const exportForm = read("components/clip-export-form.tsx");
+    const validation = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/ready-clip-validation.ts");
+
+    expect(exportForm).toContain("required");
+    expect(validation).toContain("const requiredNumber");
+    expect(validation).toContain("MIN_TIMELINE_SEGMENT_SECONDS = 0.25");
+    expect(validation).toContain("leadingBodyDuration");
+    expect(validation).toContain("trailingBodyDuration");
+  });
+
+  it("creates a ready clip and render job atomically", () => {
+    const readyRoute = read("app/api/stream-scan/clip-ideas/[id]/ready-clip/route.ts");
+    const migration = read("supabase/migrations/007_atomic_ready_clip_queue.sql");
+
+    expect(readyRoute).toContain('.rpc("queue_ready_clip_render"');
+    expect(readyRoute).not.toContain('from("clips").insert');
+    expect(migration).toContain("create or replace function queue_ready_clip_render");
+    expect(migration).toContain("insert into clips");
+    expect(migration).toContain("insert into processing_jobs");
+    expect(migration).toContain("grant execute on function queue_ready_clip_render");
+    expect(migration).toContain("create or replace function complete_render_job");
+    expect(migration).toContain("create or replace function fail_processing_job");
   });
 
   it("presents the video detail page as a clean Moment Review workspace with live updates", () => {

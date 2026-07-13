@@ -39,3 +39,8 @@ export function isHeartbeatConnected(heartbeat: { last_seen_at?: string } | null
 export function formatLastSeen(heartbeat: { last_seen_at?: string } | null, now?: Date): string;
 
 export function userFriendlyWorkerError(error: unknown): string;
+
+export function retryOperation<T>(
+  operation: (attempt: number) => Promise<T>,
+  options?: { attempts?: number; delayMs?: number }
+): Promise<T>;

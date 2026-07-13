@@ -7,6 +7,16 @@ export function normalizeEditPlan(value, options = {}) {
     throw new Error("Invalid clip bounds.");
   }
 
+  const strict = value?.version === 1 && options.legacy !== true;
+  if (strict) {
+    if (!["natural", "cold_open"].includes(value.hook_mode)) throw new Error("Invalid hook mode.");
+    if (!["left", "center", "right"].includes(value.framing_mode)) throw new Error("Invalid framing mode.");
+    if (!["crop", "blur"].includes(value.background_mode)) throw new Error("Invalid background mode.");
+    if (value.subtitle_preset !== "creator") throw new Error("Invalid subtitle preset.");
+    if (typeof value.add_captions !== "boolean") throw new Error("Invalid caption setting.");
+    if (typeof value.enhance_enabled !== "boolean") throw new Error("Invalid enhance setting.");
+  }
+
   const plan = {
     version: 1,
     start_seconds: start,
@@ -60,21 +70,39 @@ export function buildRenderTimeline(value) {
   return timeline;
 }
 
+export function groundColdOpenHook(candidate, words) {
+  if (candidate?.hook_mode !== "cold_open") return candidate;
+  const hookWords = words
+    .filter((word) => word.end > candidate.hook_start_time && word.start < candidate.hook_end_time)
+    .sort((first, second) => first.start - second.start);
+  const hook = hookWords
+    .map((word) => String(word.text ?? word.word ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!hook) {
+    return { ...candidate, hook_mode: "natural", hook_start_time: null, hook_end_time: null };
+  }
+  return { ...candidate, hook };
+}
+
 export function buildAssDocument(words, timeline, options = {}) {
   const width = Number(options.width ?? 1080);
   const height = Number(options.height ?? 1920);
-  const mapped = words
-    .map((word) => ({ ...word, outputStart: mapSourceTime(word.start, timeline), outputEnd: mapSourceTime(word.end, timeline) }))
-    .filter((word) => Number.isFinite(word.outputStart) && Number.isFinite(word.outputEnd) && word.outputEnd > word.outputStart);
+  const mapped = mapCaptionItemsToTimeline(words, timeline);
   const dialogues = [];
-  for (let index = 0; index < mapped.length; index += 4) {
-    const group = mapped.slice(index, index + 4);
-    for (const [activeIndex, active] of group.entries()) {
-      const text = group.map((word, wordIndex) => {
-        const escaped = escapeAssText(word.text ?? word.word ?? "");
-        return wordIndex === activeIndex ? `{\\1c&H00FFFF&}${escaped}{\\1c&HFFFFFF&}` : escaped;
-      }).join(" ");
-      dialogues.push(`Dialogue: 0,${assTime(active.outputStart)},${assTime(active.outputEnd)},Creator,,0,0,0,,${text}`);
+  for (const timelineIndex of new Set(mapped.map((word) => word.timelineIndex))) {
+    const segmentWords = mapped.filter((word) => word.timelineIndex === timelineIndex);
+    for (let index = 0; index < segmentWords.length; index += 4) {
+      const group = segmentWords.slice(index, index + 4);
+      for (const [activeIndex, active] of group.entries()) {
+        const text = group.map((word, wordIndex) => {
+          const escaped = escapeAssText(word.text ?? word.word ?? "");
+          return wordIndex === activeIndex ? `{\\1c&H00FFFF&}${escaped}{\\1c&HFFFFFF&}` : escaped;
+        }).join(" ");
+        dialogues.push(`Dialogue: 0,${assTime(active.outputStart)},${assTime(active.outputEnd)},Creator,,0,0,0,,${text}`);
+      }
     }
   }
   return [
@@ -146,13 +174,27 @@ export function validateProbeResult(probe, expected) {
   return { ok: errors.length === 0, errors };
 }
 
-function mapSourceTime(sourceTime, timeline) {
+function mapCaptionItemsToTimeline(words, timeline) {
+  const mapped = [];
   let offset = 0;
-  for (const segment of timeline) {
-    if (sourceTime >= segment.start && sourceTime <= segment.end) return offset + sourceTime - segment.start;
+  for (const [timelineIndex, segment] of timeline.entries()) {
+    for (const word of words) {
+      const sourceStart = Number(word.start);
+      const sourceEnd = Number(word.end);
+      if (!Number.isFinite(sourceStart) || !Number.isFinite(sourceEnd)) continue;
+      const clippedStart = Math.max(sourceStart, segment.start);
+      const clippedEnd = Math.min(sourceEnd, segment.end);
+      if (clippedEnd <= clippedStart) continue;
+      mapped.push({
+        ...word,
+        timelineIndex,
+        outputStart: offset + clippedStart - segment.start,
+        outputEnd: offset + clippedEnd - segment.start
+      });
+    }
     offset += segment.end - segment.start;
   }
-  return Number.NaN;
+  return mapped.sort((first, second) => first.outputStart - second.outputStart || first.outputEnd - second.outputEnd);
 }
 
 function assTime(seconds) {

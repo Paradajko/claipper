@@ -17,6 +17,12 @@ export type TranscriptWord = { start: number; end: number; text?: string; word?:
 
 export function normalizeEditPlan(value: EditPlan, options?: { legacy?: boolean }): Required<EditPlan>;
 export function buildRenderTimeline(value: EditPlan): RenderSegment[];
+export function groundColdOpenHook<T extends {
+  hook_mode?: "natural" | "cold_open";
+  hook_start_time?: number | null;
+  hook_end_time?: number | null;
+  hook?: string;
+}>(candidate: T, words: TranscriptWord[]): T;
 export function buildAssDocument(
   words: TranscriptWord[],
   timeline: RenderSegment[],
