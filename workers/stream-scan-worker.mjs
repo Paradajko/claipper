@@ -8,6 +8,11 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
 import {
+  buildYtDlpDownloadArgs,
+  createPlatformImportError,
+  findAvailableChromeImpersonationTarget
+} from "./platform-import.mjs";
+import {
   buildAssDocument,
   buildReadyRenderCommand,
   buildRenderTimeline,
@@ -183,19 +188,15 @@ async function processPlatformImport(job) {
   await updateJob(job.id, "running", "downloading_source", 10);
   await updateVideo(video.id, "downloading", 10, "Downloading platform video with processing worker.");
 
-  const { stdout } = await execFileAsync(ytDlpBinary, [
-    video.source_url,
-    "--no-playlist",
-    "--restrict-filenames",
-    "--merge-output-format",
-    "mp4",
-    "--print",
-    "after_move:filepath",
-    "--format",
-    "bv*+ba/b",
-    "--output",
-    outputTemplate
-  ]);
+  const downloadArgs = buildYtDlpDownloadArgs({ sourceUrl: video.source_url, outputTemplate });
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync(ytDlpBinary, downloadArgs));
+  } catch (error) {
+    const failure = createPlatformImportError(error, { sourceUrl: video.source_url, args: downloadArgs });
+    console.error("[claipper-worker] yt-dlp verbose failure", failure.technicalError);
+    throw failure;
+  }
 
   const downloadedPath = stdout.trim().split("\n").filter(Boolean).at(-1);
   if (!downloadedPath) throw new Error("Downloader finished without returning a video file path.");
@@ -743,8 +744,8 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
 }
 
 async function failJob(job, error) {
-  const technicalError = cleanError(error);
-  const userError = userFriendlyWorkerError(error);
+  const technicalError = typeof error?.technicalError === "string" ? error.technicalError : cleanError(error);
+  const userError = typeof error?.userMessage === "string" ? error.userMessage : userFriendlyWorkerError(error);
   console.error(`[claipper-worker] job ${job.id} failed`, technicalError);
   activeStep = "failed";
   const isRenderJob = job.job_type === "render_draft" || job.job_type === "render_ready_clip";
@@ -755,7 +756,7 @@ async function failJob(job, error) {
     console.error(`[claipper-worker] job ${job.id} failure state could not be persisted after retries`, cleanError(persistenceError));
   }
   if (failureOwned && !isRenderJob && job.video_id) {
-    await updateVideo(job.video_id, "failed", 100, userError, technicalError);
+    await updateVideo(job.video_id, "failed", 100, userError, userError);
   }
   await updateHeartbeat("online", null, "failed");
 }
@@ -1566,7 +1567,7 @@ async function startupChecks() {
   const [ffmpeg, ffprobe, ytdlp, supabaseConnected] = await Promise.all([
     checkBinaryAvailability(ffmpegBinary, ["-version"]),
     checkBinaryAvailability(ffprobeBinary, ["-version"]),
-    checkBinaryAvailability(ytDlpBinary, ["--version"]),
+    checkYtDlpRuntime(),
     checkSupabaseConnection()
   ]);
 
@@ -1589,8 +1590,26 @@ async function startupChecks() {
   if (!ffmpeg.ok) missingRuntime.push(`FFmpeg unavailable at ${ffmpeg.binary}`);
   if (!ffprobe.ok) missingRuntime.push(`FFprobe unavailable at ${ffprobe.binary}`);
   if (!ytdlp.ok) missingRuntime.push(`yt-dlp unavailable at ${ytdlp.binary}`);
+  else if (!ytdlp.chromeTarget) missingRuntime.push("yt-dlp Chrome impersonation unavailable");
   if (missingRuntime.length > 0) {
     throw new Error(`Worker startup checks failed:\n${missingRuntime.join("\n")}`);
+  }
+}
+
+async function checkYtDlpRuntime() {
+  try {
+    const [{ stdout: versionOutput }, { stdout: targetsOutput }] = await Promise.all([
+      execFileAsync(ytDlpBinary, ["--version"]),
+      execFileAsync(ytDlpBinary, ["--list-impersonate-targets"])
+    ]);
+    return {
+      ok: true,
+      binary: ytDlpBinary,
+      version: versionOutput.trim(),
+      chromeTarget: findAvailableChromeImpersonationTarget(targetsOutput)
+    };
+  } catch (error) {
+    return { ok: false, binary: ytDlpBinary, error: cleanError(error), version: null, chromeTarget: null };
   }
 }
 

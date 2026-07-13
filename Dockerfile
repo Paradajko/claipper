@@ -10,7 +10,11 @@ RUN apt-get update \
     ffmpeg \
     python3 \
     python3-pip \
-  && python3 -m pip install --break-system-packages --no-cache-dir yt-dlp \
+  && python3 -m pip install --break-system-packages --no-cache-dir "yt-dlp[default,curl-cffi]" \
+  && yt-dlp --version \
+  && yt-dlp --list-impersonate-targets | tee /tmp/yt-dlp-impersonate-targets.txt \
+  && grep -Ei "chrome.*curl_cffi" /tmp/yt-dlp-impersonate-targets.txt | grep -Eivq "unavailable" \
+  && rm -f /tmp/yt-dlp-impersonate-targets.txt \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

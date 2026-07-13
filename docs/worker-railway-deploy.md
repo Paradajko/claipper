@@ -12,7 +12,7 @@ Do not run FFmpeg, yt-dlp, platform imports, transcription, AI analysis, or draf
 
 ## Files Used
 
-- `Dockerfile` installs Node.js runtime dependencies, FFmpeg, Python, pip, and `yt-dlp`.
+- `Dockerfile` installs Node.js runtime dependencies, FFmpeg, Python, pip, and `yt-dlp[default,curl-cffi]`.
 - `railway.json` tells Railway to build with the Dockerfile and start `npm run worker:stream-scan`.
 - `workers/stream-scan-worker.mjs` polls Supabase `processing_jobs` and updates `worker_heartbeats`.
 - `workers/stream-scan-smoke-test.mjs` verifies the worker environment without processing video.
@@ -86,6 +86,7 @@ The Dockerfile installs both:
 ffmpeg -version
 ffprobe -version
 yt-dlp --version
+yt-dlp --list-impersonate-targets
 ```
 
 The worker startup report also checks both binaries:
@@ -94,6 +95,7 @@ The worker startup report also checks both binaries:
 FFmpeg: available
 FFprobe: available
 yt-dlp: available
+yt-dlp Chrome impersonation: available
 ```
 
 ## Run Smoke Test
@@ -141,6 +143,7 @@ Supabase: connected
 OpenAI key: present
 FFmpeg: available
 yt-dlp: available
+yt-dlp Chrome impersonation: available
 Buckets:
 - original-videos
 - extracted-audio
@@ -224,7 +227,7 @@ Confirm Railway is building from `Dockerfile`, not Nixpacks.
 
 ### yt-dlp unavailable
 
-Confirm Railway is building from `Dockerfile`. The Dockerfile installs `yt-dlp` with pip.
+Confirm Railway is building from `Dockerfile`. The Dockerfile installs `yt-dlp[default,curl-cffi]` with pip and fails the build unless `yt-dlp --list-impersonate-targets` reports an available Chrome target.
 
 ### Supabase permission denied
 

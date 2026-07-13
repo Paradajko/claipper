@@ -28,7 +28,7 @@ export function formatStartupReport(input: {
   openAiPresent: boolean;
   ffmpeg: { ok: boolean; binary: string };
   ffprobe: { ok: boolean; binary: string };
-  ytdlp: { ok: boolean; binary: string };
+  ytdlp: { ok: boolean; binary: string; version?: string | null; chromeTarget?: string | null };
   buckets: { originals: string; audio: string; clips: string };
   pollIntervalMs: number;
   environment: string;

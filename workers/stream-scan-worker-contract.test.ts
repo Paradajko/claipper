@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const worker = readFileSync("workers/stream-scan-worker.mjs", "utf8");
 const atomicRenderMigration = readFileSync("supabase/migrations/007_atomic_ready_clip_queue.sql", "utf8");
+const dockerfile = readFileSync("Dockerfile", "utf8");
 
 describe("ready render worker contract", () => {
   it("uses the deterministic production module and FFprobe before upload", () => {
@@ -79,5 +80,16 @@ describe("ready render worker contract", () => {
   it("uses strict validation for current edit plans and legacy fallback only for old data", () => {
     expect(worker).toContain("const storedEditPlan = renderClip.raw_data?.edit_plan");
     expect(worker).toContain("legacy: !storedEditPlan || storedEditPlan.version !== 1");
+  });
+
+  it("installs and verifies yt-dlp Chrome impersonation in the Railway image", () => {
+    expect(dockerfile).toContain('"yt-dlp[default,curl-cffi]"');
+    expect(dockerfile).toContain("yt-dlp --version");
+    expect(dockerfile).toContain("yt-dlp --list-impersonate-targets");
+    expect(dockerfile).toContain("unavailable");
+    expect(worker).toContain('"--list-impersonate-targets"');
+    expect(worker).toContain("findAvailableChromeImpersonationTarget");
+    expect(worker).toContain("yt-dlp Chrome impersonation unavailable");
+    expect(worker).toContain('await updateVideo(job.video_id, "failed", 100, userError, userError)');
   });
 });
