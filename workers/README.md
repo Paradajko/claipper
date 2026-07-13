@@ -4,7 +4,7 @@ The presentation MVP runs all media work on the operator Mac. Supabase stores st
 
 ## Processes
 
-`npm run dev:local` starts three processes:
+`npm run dev:local` loads the existing Supabase/OpenAI credentials from the linked Railway service, then starts three local processes:
 
 - Next.js at `http://127.0.0.1:3000`
 - the token-protected local upload/media agent at `http://127.0.0.1:43120`
@@ -42,7 +42,9 @@ APP_PASSWORD=
 
 Generate the local token with `openssl rand -hex 32`. Enter the same value once in the Content Lab token field; the browser keeps it in local storage.
 
-Cloud bucket, R2/S3, and yt-dlp variables are not required while `CLAIPPER_STORAGE_MODE=local`.
+The removed Railway deployment does not run any worker. `railway run` is used only as a secure environment-variable source for the Mac processes; no media is sent to Railway. Cloud bucket, R2/S3, and yt-dlp variables are not used while `CLAIPPER_STORAGE_MODE=local`.
+
+If the API credentials are filled directly in `.env.local`, `npm run dev:local:processes` starts the same runtime without Railway CLI injection.
 
 ## Dependencies and database
 

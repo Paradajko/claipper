@@ -98,6 +98,8 @@ describe("AI-first app workflow naming", () => {
     expect(contentLab).toContain("content-lab-upload-shell");
     expect(contentLab).not.toContain("lg:grid-cols-[minmax(0,1fr)_360px]");
     expect(contentLab).toContain("Recent analyses");
+    expect(contentLab).toContain("cleanRecentError");
+    expect(contentLab).not.toContain("{latestJob?.error_message ?");
     expect(ingest).toContain("min-h-44");
     expect(ingest).toContain("content-lab-dropzone");
     expect(css).toContain("@keyframes ambient-shift");
@@ -411,6 +413,9 @@ describe("AI-first app workflow naming", () => {
     expect(workerReadme).toContain("CLAIPPER_LOCAL_STORAGE_DIR");
     expect(workerReadme).toContain("FFPROBE_PATH");
     expect(packageJson).toContain('"dev:local"');
+    expect(packageJson).toContain('"dev:local": "railway run npm run dev:local:processes"');
+    expect(packageJson).toContain('"dev:local:processes"');
+    expect(packageJson).toContain("WORKER_ID=claipper-mac concurrently");
     expect(packageJson).toContain("concurrently --kill-others-on-fail");
     expect(packageJson).toContain("npm:worker:local-agent");
     expect(packageJson).toContain("npm:worker:stream-scan");

@@ -117,6 +117,7 @@ function WorkerStatusStrip({ heartbeat, connected }: { heartbeat: WorkerHeartbea
 
 function StreamVideoCard({ video, workerConnected }: { video: StreamVideo; workerConnected: boolean }) {
   const latestJob = latestProcessingJob(video.processing_jobs);
+  const recentError = cleanRecentError(video.error_message, latestJob?.error_message);
   const progress = Math.max(0, Math.min(100, latestJob?.progress_percent ?? video.progress_percent ?? statusProgress(video.status)));
   const stateText =
     describeVideoProcessingState({
@@ -146,8 +147,7 @@ function StreamVideoCard({ video, workerConnected }: { video: StreamVideo; worke
             />
           </div>
           <p className="mt-1 text-xs text-slate-500">{progress}%</p>
-          {video.error_message ? <p className="mt-2 text-sm text-rose-200">{video.error_message}</p> : null}
-          {latestJob?.error_message ? <p className="mt-2 text-sm text-rose-200">{latestJob.error_message}</p> : null}
+          {recentError ? <p className="mt-2 text-sm text-rose-200">{recentError}</p> : null}
         </div>
         <Link href={`/app/content-lab/${video.id}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/15">
           Open scan <ArrowRight size={15} />
@@ -159,6 +159,14 @@ function StreamVideoCard({ video, workerConnected }: { video: StreamVideo; worke
 
 function latestProcessingJob(jobs: ProcessingJob[] | undefined) {
   return [...(jobs ?? [])].sort((first, second) => new Date(second.created_at).getTime() - new Date(first.created_at).getTime())[0];
+}
+
+function cleanRecentError(...values: Array<string | null | undefined>) {
+  const messages = [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+  if (messages.length === 0) return null;
+
+  const technicalPattern = /command failed:|yt-dlp\s+https?:|traceback|<httperror|--output|technical_error/i;
+  return messages.find((message) => !technicalPattern.test(message)) ?? "Processing failed. Open the scan for details.";
 }
 
 function VideoStateBadge({ state }: { state: StreamVideo["status"] }) {
