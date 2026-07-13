@@ -102,6 +102,9 @@ describe("AI-first app workflow naming", () => {
     expect(contentLab).not.toContain("{latestJob?.error_message ?");
     expect(ingest).toContain("min-h-44");
     expect(ingest).toContain("content-lab-dropzone");
+    expect(ingest).toContain(".mpg,.mpeg");
+    expect(ingest).toContain("video/mpeg");
+    expect(ingest).toContain("MPG or MPEG");
     expect(css).toContain("@keyframes ambient-shift");
     expect(css).toContain(".premium-hover");
     for (const source of [dashboard, contentLab]) {

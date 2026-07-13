@@ -76,6 +76,33 @@ describe("Claipper local agent", () => {
     await app.close();
   });
 
+  it("accepts an MPG upload with the MPEG content type", async () => {
+    const createUploadRecords = vi.fn(async () => undefined);
+    const { app, root } = await createAgent(createUploadRecords);
+    const multipart = multipartBody([
+      { name: "video", filename: "archive.mpg", contentType: "video/mpeg", value: Buffer.from("mpeg-bytes") }
+    ]);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/uploads",
+      headers: {
+        "x-claipper-agent-token": "test-token",
+        "content-type": `multipart/form-data; boundary=${multipart.boundary}`
+      },
+      payload: multipart.body
+    });
+
+    expect(response.statusCode).toBe(201);
+    const payload = response.json();
+    await expect(readFile(path.join(root, payload.videoId, "original", "source.mpg"), "utf8")).resolves.toBe("mpeg-bytes");
+    expect(createUploadRecords).toHaveBeenCalledWith(expect.objectContaining({
+      originalFilename: "archive.mpg",
+      mimeType: "video/mpeg"
+    }));
+    await app.close();
+  });
+
   it("serves byte ranges and blocks paths outside local storage", async () => {
     const { app, root } = await createAgent();
     const relativePath = "e9ac4e02-6176-477c-a0ee-73b969b4493a/clips/clip/ready.mp4";

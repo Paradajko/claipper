@@ -15,6 +15,8 @@ const CONTENT_TYPES = {
   ".mov": "video/quicktime",
   ".mkv": "video/x-matroska",
   ".webm": "video/webm",
+  ".mpg": "video/mpeg",
+  ".mpeg": "video/mpeg",
   ".json": "application/json",
   ".ass": "text/x-ssa"
 };

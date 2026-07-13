@@ -68,7 +68,7 @@ Health check: `http://127.0.0.1:43120/health`.
 
 ## Output
 
-For each video, Claipper creates an isolated directory containing the original, optional raw and normalized chat, metadata, temporary working files, captions, previews, and ready clips. Ready clips are rendered as 1080x1920 H.264/AAC MP4 with word-timed ASS captions and FFprobe QA.
+For each MP4, MOV, MKV, WEBM, MPG, or MPEG video, Claipper creates an isolated directory containing the original, optional raw and normalized chat, metadata, temporary working files, captions, previews, and ready clips. Ready clips are rendered as 1080x1920 H.264/AAC MP4 with word-timed ASS captions and FFprobe QA.
 
 No real video was tested by Codex. The operator performs the first media upload, quality review, Natural export, Cold open export, Creator Enhance check, framing/background comparison, and final download.
 

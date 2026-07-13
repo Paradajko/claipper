@@ -13,8 +13,8 @@ export const streamScanFlags = {
 
 export const MVP_UPLOAD_LIMIT_MB = 1000;
 
-export const supportedVideoExtensions = ["mp4", "mov", "mkv", "webm"] as const;
-export const supportedVideoMimeTypes = ["video/mp4", "video/quicktime", "video/x-matroska", "video/webm"] as const;
+export const supportedVideoExtensions = ["mp4", "mov", "mkv", "webm", "mpg", "mpeg"] as const;
+export const supportedVideoMimeTypes = ["video/mp4", "video/quicktime", "video/x-matroska", "video/webm", "video/mpeg"] as const;
 
 export function maxUploadSizeBytes() {
   const mb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? String(MVP_UPLOAD_LIMIT_MB));

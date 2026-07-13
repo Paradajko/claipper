@@ -28,6 +28,15 @@ describe("local media storage", () => {
     await expect(stat(layout.clipsDir)).resolves.toMatchObject({});
   });
 
+  it.each(["mpg", "mpeg"])("accepts MPEG source extension %s", async (extension) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "claipper-local-storage-"));
+    roots.push(root);
+
+    const layout = await createLocalVideoLayout(root, videoId, extension);
+
+    expect(layout.sourceRelativePath).toBe(`${videoId}/original/source.${extension}`);
+  });
+
   it("rejects invalid IDs and unsupported source extensions", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "claipper-local-storage-"));
     roots.push(root);

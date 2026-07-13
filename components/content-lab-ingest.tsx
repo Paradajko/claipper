@@ -108,7 +108,7 @@ export function ContentLabIngest() {
             <span className="min-w-0">
               <span className="block break-words text-lg font-semibold">{file ? file.name : "Drop a video here"}</span>
               <span className="mt-2 block text-sm font-normal text-slate-400">
-                {fileSize ? `${fileSize} selected.` : "Choose an MP4, MOV, MKV or WEBM file."}
+                {fileSize ? `${fileSize} selected.` : "Choose an MP4, MOV, MKV, WEBM, MPG or MPEG file."}
               </span>
             </span>
           </span>
@@ -116,7 +116,7 @@ export function ContentLabIngest() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".mp4,.mov,.mkv,.webm,video/mp4,video/quicktime,video/x-matroska,video/webm"
+          accept=".mp4,.mov,.mkv,.webm,.mpg,.mpeg,video/mp4,video/quicktime,video/x-matroska,video/webm,video/mpeg"
           className="hidden"
           onChange={(event) => setFile(event.target.files?.[0] ?? null)}
         />
@@ -163,7 +163,7 @@ export function ContentLabIngest() {
           </span>
         </label>
 
-        <p className="text-xs text-slate-500">Current local upload limit: {maxSizeMb} MB · MP4, MOV, MKV, WEBM</p>
+        <p className="text-xs text-slate-500">Current local upload limit: {maxSizeMb} MB · MP4, MOV, MKV, WEBM, MPG, MPEG</p>
         <ProgressBar progress={progress} />
         <button
           type="button"
