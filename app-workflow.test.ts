@@ -29,7 +29,7 @@ describe("AI-first app workflow naming", () => {
     const dashboard = read("app/app/page.tsx");
 
     expect(dashboard).toContain("Find clips in minutes.");
-    expect(dashboard).toContain("Upload a long video, paste a link, or start from campaign context.");
+    expect(dashboard).toContain("Upload a long video with optional Kick chat, or start from campaign context.");
     expect(dashboard).toContain("Upload content");
     expect(dashboard).toContain("Start from brief");
     expect(dashboard).toContain("Clip Ideas");
@@ -55,15 +55,23 @@ describe("AI-first app workflow naming", () => {
 
     expect(contentLab).toContain("Content Lab");
     expect(contentLab).toContain("Upload content to find clips.");
-    expect(contentLab).toContain("Start with a video file or paste a link. Claipper will surface the strongest moments.");
+    expect(contentLab).toContain("Upload a video file and optionally add Kick chat JSON.");
     expect(contentLab).toContain("content-lab-upload-shell");
     expect(contentLab).toContain("WorkerStatusStrip");
     expect(ingest).toContain("Upload video");
-    expect(ingest).toContain("Paste link");
-    expect(ingest).toContain("Platform link");
+    expect(ingest).toContain("Kick chat JSON");
+    expect(ingest).toContain('accept=".json,application/json"');
+    expect(ingest).toContain('formData.append("chat_offset_seconds"');
     expect(ingest).toContain("Drop a video here");
     expect(ingest).toContain("Start analysis");
-    expect(ingest).toContain("Analyze link");
+    expect(ingest).toContain("NEXT_PUBLIC_CLAIPPER_AGENT_URL");
+    expect(ingest).toContain('localStorage.getItem("claipper_local_agent_token")');
+    expect(ingest).toContain("new XMLHttpRequest()");
+    expect(ingest).toContain('request.open("POST", `${agentUrl}/uploads`)');
+    expect(ingest).toContain('fetch(`${agentUrl}/health`');
+    expect(ingest).toContain("Local agent is offline");
+    expect(ingest).not.toContain("/api/stream-scan/import-link");
+    expect(ingest).not.toContain("Paste link");
 
     for (const manualField of ["Duration seconds", "Transcript", "directly to Supabase Storage", "queue a YouTube"]) {
       expect(contentLab).not.toContain(manualField);
@@ -319,20 +327,15 @@ describe("AI-first app workflow naming", () => {
     expect(worker).toContain("video/mp4");
   });
 
-  it("sets the MVP direct upload limit to 1000 MB and explains bucket-limit failures", () => {
-    const config = read("lib/stream-scan-config.ts");
+  it("uses the local agent upload limit and bypasses cloud media storage", () => {
     const ingest = read("components/content-lab-ingest.tsx");
-    const bucketMigration = read("supabase/migrations/005_mvp_upload_limit.sql");
     const envExample = read(".env.example");
 
-    expect(config).toContain("MVP_UPLOAD_LIMIT_MB = 1000");
-    expect(config).toContain("MAX_UPLOAD_SIZE_MB ?? String(MVP_UPLOAD_LIMIT_MB)");
-    expect(ingest).toContain("Current upload limit: {maxSizeMb} MB");
-    expect(ingest).toContain("Supabase Storage is still capped below this file size");
-    expect(bucketMigration).toContain("file_size_limit = 1048576000");
-    expect(bucketMigration).toContain("where id = 'original-videos'");
-    expect(envExample).toContain("MAX_UPLOAD_SIZE_MB=1000");
-    expect(envExample).toContain("NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=1000");
+    expect(ingest).toContain("NEXT_PUBLIC_CLAIPPER_LOCAL_MAX_UPLOAD_SIZE_MB");
+    expect(ingest).toContain("Current local upload limit: {maxSizeMb} MB");
+    expect(ingest).not.toContain("Supabase Storage is still capped below this file size");
+    expect(envExample).toContain("CLAIPPER_LOCAL_MAX_UPLOAD_SIZE_MB=20000");
+    expect(envExample).toContain("NEXT_PUBLIC_CLAIPPER_LOCAL_MAX_UPLOAD_SIZE_MB=20000");
   });
 
   it("supports provider-agnostic original video uploads with R2, S3 and Supabase fallback", () => {
@@ -379,10 +382,8 @@ describe("AI-first app workflow naming", () => {
     expect(uploadCompleteRoute).toContain("sourceStorageProvider");
     expect(uploadCompleteRoute).toContain("sourceStoragePath");
     expect(uploadCompleteRoute).toContain("rawData.source_storage_provider");
-    expect(ingest).toContain('uploadMethod?: "object_storage_put" | "supabase_signed"');
-    expect(ingest).toContain('session.uploadMethod === "object_storage_put"');
-    expect(ingest).toContain('request.open("PUT", session.signedUrl)');
-    expect(ingest).toContain("uploadToSignedUrl");
+    expect(ingest).toContain('request.open("POST", `${agentUrl}/uploads`)');
+    expect(ingest).not.toContain("uploadToSignedUrl");
     expect(worker).toContain("downloadSourceVideo(video, sourcePath)");
     expect(worker).toContain("downloadOriginalVideo");
     expect(worker).not.toContain("downloadR2File");

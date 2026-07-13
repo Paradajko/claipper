@@ -1,113 +1,88 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { Link2, Loader2, UploadCloud } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FileJson, KeyRound, Loader2, UploadCloud } from "lucide-react";
 
-type UploadSession = {
+type LocalUploadResponse = {
   videoId: string;
-  bucket: string;
-  storagePath: string;
-  sourceStorageProvider?: "r2" | "s3" | "supabase";
-  sourceStoragePath?: string;
-  token: string | null;
-  signedUrl: string;
-  uploadMethod?: "object_storage_put" | "supabase_signed";
-  headers?: Record<string, string>;
+  href: string;
+  error?: string;
 };
 
-const maxSizeMb = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 1000);
+const agentUrl = (process.env.NEXT_PUBLIC_CLAIPPER_AGENT_URL ?? "http://127.0.0.1:43120").replace(/\/+$/, "");
+const maxSizeMb = Number(process.env.NEXT_PUBLIC_CLAIPPER_LOCAL_MAX_UPLOAD_SIZE_MB ?? 20000);
+const agentTokenKey = "claipper_local_agent_token";
 
 export function ContentLabIngest() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"upload" | "link">("upload");
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [linkTitle, setLinkTitle] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
+  const [chatFile, setChatFile] = useState<File | null>(null);
+  const [chatOffsetSeconds, setChatOffsetSeconds] = useState("0");
+  const [agentToken, setAgentToken] = useState("");
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAgentToken(window.localStorage.getItem("claipper_local_agent_token") ?? "");
+  }, []);
+
+  function updateAgentToken(value: string) {
+    setAgentToken(value);
+    if (value) window.localStorage.setItem(agentTokenKey, value);
+    else window.localStorage.removeItem(agentTokenKey);
+  }
 
   async function uploadVideo() {
     if (!file) {
       setError("Choose a video file first.");
       return;
     }
-
-    setBusy(true);
-    setError(null);
-    setMessage("Creating upload session.");
-    setProgress(5);
-
-    try {
-      const sessionResponse = await fetch("/api/stream-scan/upload-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim() || file.name,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          size: file.size
-        })
-      });
-      const sessionPayload = await sessionResponse.json();
-      if (!sessionResponse.ok) throw new Error(sessionPayload.error ?? "Could not create upload session.");
-
-      const session = sessionPayload as UploadSession;
-      setMessage("Uploading video.");
-      setProgress(15);
-
-      await uploadWithProgress(session, file, (nextProgress) => {
-        setProgress(Math.max(15, Math.min(92, nextProgress)));
-      });
-
-      setMessage("Starting analysis.");
-      setProgress(95);
-
-      const completeResponse = await fetch("/api/stream-scan/upload-complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          videoId: session.videoId,
-          bucket: session.bucket,
-          storagePath: session.storagePath,
-          sourceStorageProvider: session.sourceStorageProvider,
-          sourceStoragePath: session.sourceStoragePath
-        })
-      });
-      const completePayload = await completeResponse.json();
-      if (!completeResponse.ok) throw new Error(completePayload.error ?? "Upload finished, but processing could not be queued.");
-
-      setProgress(100);
-      window.location.href = completePayload.href;
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Upload failed.");
-      setMessage(null);
-      setProgress(0);
-    } finally {
-      setBusy(false);
+    if (!agentToken.trim()) {
+      setError("Enter the local agent token first.");
+      return;
     }
-  }
+    if (file.size > maxSizeMb * 1024 * 1024) {
+      setError(`Video exceeds the ${maxSizeMb} MB local upload limit.`);
+      return;
+    }
 
-  async function importLink() {
     setBusy(true);
     setError(null);
-    setMessage("Starting link analysis.");
+    setMessage("Checking local agent.");
+    setProgress(2);
 
     try {
-      const response = await fetch("/api/stream-scan/import-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: linkTitle.trim(), sourceUrl: sourceUrl.trim() })
+      const health = await fetch(`${agentUrl}/health`, { cache: "no-store" });
+      if (!health.ok) throw new Error("Local agent is offline. Start npm run dev:local and try again.");
+      const healthPayload = await health.json();
+      if (!healthPayload.ok || !healthPayload.tools?.ffmpeg || !healthPayload.tools?.ffprobe || !healthPayload.tools?.openai) {
+        throw new Error("Local agent is online, but FFmpeg, FFprobe or OpenAI is not ready.");
+      }
+
+      const formData = new FormData();
+      formData.append("title", title.trim() || file.name);
+      formData.append("video", file, file.name);
+      formData.append("chat_offset_seconds", chatOffsetSeconds || "0");
+      if (chatFile) formData.append("chat", chatFile, chatFile.name);
+
+      setMessage("Uploading to local Claipper agent.");
+      const payload = await uploadToLocalAgent(formData, agentToken.trim(), (nextProgress) => {
+        setProgress(Math.max(2, Math.min(99, nextProgress)));
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Could not queue platform import.");
+      setProgress(100);
+      setMessage("Upload complete. Opening analysis.");
       window.location.href = payload.href;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not import this link. Upload the video file directly.");
+      const caughtMessage = caught instanceof Error ? caught.message : "Local upload failed.";
+      setError(/failed to fetch|networkerror|load failed/i.test(caughtMessage)
+        ? "Local agent is offline. Start npm run dev:local and try again."
+        : caughtMessage);
       setMessage(null);
+      setProgress(0);
     } finally {
       setBusy(false);
     }
@@ -117,80 +92,89 @@ export function ContentLabIngest() {
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-black/25 p-1 text-sm">
-        <button
-          type="button"
-          onClick={() => setActiveTab("upload")}
-          className={activeTab === "upload" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 transition hover:bg-white/[0.05]"}
-        >
-          Upload video
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("link")}
-          className={activeTab === "link" ? "rounded-md bg-emerald-400/90 px-3 py-2 font-semibold text-slate-950" : "rounded-md px-3 py-2 font-semibold text-slate-300 transition hover:bg-white/[0.05]"}
-        >
-          Paste link
-        </button>
-      </div>
+      <div className="grid gap-4">
+        <Input value={title} onChange={(event) => setTitle(event.target.value)} label="Video title" placeholder="Optional title" />
 
-      {activeTab === "upload" ? (
-        <div className="grid gap-4">
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} label="Video title" placeholder="Optional title" />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="content-lab-dropzone grid min-h-44 gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-6 text-left transition hover:border-emerald-400/45 hover:bg-emerald-400/[0.07]"
-          >
-            <span className="relative flex flex-col gap-4 font-medium text-white sm:flex-row sm:items-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
-                <UploadCloud className="h-6 w-6" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-lg font-semibold">{file ? file.name : "Drop a video here"}</span>
-                <span className="mt-2 block text-sm font-normal text-slate-400">
-                  {fileSize ? `${fileSize} selected.` : "Choose an MP4, MOV, MKV or WEBM file to start finding clips."}
-                </span>
+        <button
+          type="button"
+          aria-label="Upload video"
+          onClick={() => fileInputRef.current?.click()}
+          className="content-lab-dropzone grid min-h-44 gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.045] p-6 text-left transition hover:border-emerald-400/45 hover:bg-emerald-400/[0.07]"
+        >
+          <span className="relative flex flex-col gap-4 font-medium text-white sm:flex-row sm:items-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-emerald-300/25 bg-emerald-300/10 text-emerald-200">
+              <UploadCloud className="h-6 w-6" />
+            </span>
+            <span className="min-w-0">
+              <span className="block break-words text-lg font-semibold">{file ? file.name : "Drop a video here"}</span>
+              <span className="mt-2 block text-sm font-normal text-slate-400">
+                {fileSize ? `${fileSize} selected.` : "Choose an MP4, MOV, MKV or WEBM file."}
               </span>
             </span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".mp4,.mov,.mkv,.webm,video/mp4,video/quicktime,video/x-matroska,video/webm"
-            className="hidden"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          </span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mp4,.mov,.mkv,.webm,video/mp4,video/quicktime,video/x-matroska,video/webm"
+          className="hidden"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+
+        <div className="grid gap-3 rounded-lg border border-white/10 bg-black/20 p-4 sm:grid-cols-[minmax(0,1fr)_160px] sm:items-end">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-300">Kick chat JSON <span className="text-slate-500">(optional)</span></p>
+            <button
+              type="button"
+              onClick={() => chatInputRef.current?.click()}
+              className="mt-2 inline-flex min-h-10 max-w-full items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-300/30 hover:bg-emerald-300/10"
+            >
+              <FileJson className="h-4 w-4 shrink-0" />
+              <span className="truncate">{chatFile?.name ?? "Choose JSON"}</span>
+            </button>
+            <input
+              ref={chatInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(event) => setChatFile(event.target.files?.[0] ?? null)}
+            />
+          </div>
+          <Input
+            type="number"
+            step="0.1"
+            value={chatOffsetSeconds}
+            onChange={(event) => setChatOffsetSeconds(event.target.value)}
+            label="Chat offset (seconds)"
           />
-          <p className="text-xs text-slate-500">Current upload limit: {maxSizeMb} MB · MP4, MOV, MKV, WEBM</p>
-          <ProgressBar progress={progress} />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={uploadVideo}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Start analysis
-          </button>
         </div>
-      ) : (
-        <div className="grid gap-4">
-          <Input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} label="Video title" placeholder="Optional title" />
-          <Input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} label="Platform link" placeholder="YouTube, Twitch or Kick URL" />
-          <p className="rounded-md border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-slate-400">
-            Paste a public video link when the source is already online. Uploading a file is usually faster for long videos.
-          </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={importLink}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Analyze link
-          </button>
-        </div>
-      )}
+
+        <label className="grid gap-1 text-sm text-slate-300">
+          Local agent token
+          <span className="relative">
+            <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              type="password"
+              autoComplete="off"
+              value={agentToken}
+              onChange={(event) => updateAgentToken(event.target.value)}
+              className="h-11 w-full rounded-md border border-white/10 bg-black/20 pl-10 pr-3 text-white outline-none focus:border-emerald-400/60"
+            />
+          </span>
+        </label>
+
+        <p className="text-xs text-slate-500">Current local upload limit: {maxSizeMb} MB · MP4, MOV, MKV, WEBM</p>
+        <ProgressBar progress={progress} />
+        <button
+          type="button"
+          disabled={busy || !file}
+          onClick={uploadVideo}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+          Start analysis
+        </button>
+      </div>
 
       {message ? <p className="rounded-md border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">{message}</p> : null}
       {error ? <p className="rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">{error}</p> : null}
@@ -218,74 +202,32 @@ function ProgressBar({ progress }: { progress: number }) {
   );
 }
 
-async function uploadWithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
-  if (session.uploadMethod === "object_storage_put") {
-    await uploadToObjectStorageWithProgress(session, file, onProgress);
-    return;
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Supabase upload configuration is missing.");
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  if (!session.token) {
-    throw new Error("Supabase upload token is missing.");
-  }
-  let stagedProgress = 15;
-  const stagedTimer = window.setInterval(() => {
-    stagedProgress = Math.min(88, stagedProgress + 7);
-    onProgress(stagedProgress);
-  }, 600);
-
-  try {
-    const { error } = await supabase.storage
-      .from(session.bucket)
-      .uploadToSignedUrl(session.storagePath, session.token, file, { contentType: file.type || "application/octet-stream", upsert: true });
-    if (error) throw new Error(cleanStorageUploadError(error.message));
-    onProgress(92);
-  } finally {
-    window.clearInterval(stagedTimer);
-  }
-}
-
-async function uploadToObjectStorageWithProgress(session: UploadSession, file: File, onProgress: (progress: number) => void) {
-  await new Promise<void>((resolve, reject) => {
+async function uploadToLocalAgent(formData: FormData, token: string, onProgress: (progress: number) => void) {
+  return new Promise<LocalUploadResponse>((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open("PUT", session.signedUrl);
-    for (const [key, value] of Object.entries(session.headers ?? {})) {
-      request.setRequestHeader(key, value);
-    }
-    if (!session.headers?.["Content-Type"]) {
-      request.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-    }
-
+    request.open("POST", `${agentUrl}/uploads`);
+    request.setRequestHeader("X-Claipper-Agent-Token", token);
     request.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(15 + Math.round((event.loaded / event.total) * 77));
-      }
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 98));
     };
     request.onload = () => {
-      if (request.status >= 200 && request.status < 300) {
-        onProgress(92);
-        resolve();
+      let payload: LocalUploadResponse;
+      try {
+        payload = JSON.parse(request.responseText) as LocalUploadResponse;
+      } catch {
+        reject(new Error(`Local agent returned an invalid response (${request.status}).`));
+        return;
+      }
+      if (request.status >= 200 && request.status < 300 && payload.href) {
+        onProgress(100);
+        resolve(payload);
       } else {
-        reject(new Error(`Upload to object storage failed with status ${request.status}.`));
+        reject(new Error(payload.error ?? `Local upload failed with status ${request.status}.`));
       }
     };
-    request.onerror = () => reject(new Error("Upload to object storage failed. Check the bucket CORS settings and try again."));
-    request.send(file);
+    request.onerror = () => reject(new Error("Local agent is offline. Start npm run dev:local and try again."));
+    request.send(formData);
   });
-}
-
-function cleanStorageUploadError(message: string) {
-  if (/exceeded the maximum allowed size|maximum allowed size|file size limit|payload too large/i.test(message)) {
-    return `Supabase Storage is still capped below this file size. Current app upload limit is ${maxSizeMb} MB; increase the original-videos bucket file size limit and try again.`;
-  }
-  return message || "Upload to Supabase Storage failed.";
 }
 
 function formatBytes(bytes: number) {

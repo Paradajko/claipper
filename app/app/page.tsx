@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, FileText, Film, Link2, ListChecks, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, Film, ListChecks, Sparkles, UploadCloud } from "lucide-react";
 import { AppShell, Badge, Card } from "@/components/ui";
 import { getClips, getScheduledPosts, getSourceVideos } from "@/lib/supabase";
 
@@ -25,7 +25,7 @@ export default async function DashboardPage() {
             <div className="max-w-2xl">
               <Badge className="border-emerald-300/20 bg-emerald-300/10 text-emerald-100">Claipper</Badge>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white md:text-5xl">Find clips in minutes.</h2>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 md:text-base">Upload a long video, paste a link, or start from campaign context.</p>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 md:text-base">Upload a long video with optional Kick chat, or start from campaign context.</p>
             </div>
             <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-black/20 p-2 text-center sm:min-w-80">
               <div className="rounded-md bg-white/[0.04] px-3 py-2">
@@ -51,10 +51,10 @@ export default async function DashboardPage() {
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-semibold text-white">Upload content</h2>
-                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">Drop in a long video or paste a platform link. Claipper finds the strongest moments.</p>
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">Drop in a long video and optional chat export. Claipper finds the strongest moments.</p>
                 </div>
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10 text-emerald-200">
-                  <Link2 className="h-5 w-5" />
+                  <UploadCloud className="h-5 w-5" />
                 </div>
               </div>
 

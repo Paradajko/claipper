@@ -18,7 +18,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
           <div>
             <Badge className="mb-3 border-emerald-300/20 bg-emerald-300/10 text-emerald-100">Content Lab</Badge>
             <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">Upload content to find clips.</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Start with a video file or paste a link. Claipper will surface the strongest moments.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Upload a video file and optionally add Kick chat JSON. Claipper will surface the strongest moments.</p>
           </div>
           <WorkerStatusStrip heartbeat={workerHeartbeat} connected={workerConnected} />
         </div>
@@ -28,7 +28,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3 className="text-xl font-semibold text-white">Start a new analysis</h3>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Choose a video file for the fastest path, or paste a public link when the source is already online.</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">The original, transcript and rendered clips stay on this Mac while Supabase tracks processing state.</p>
               </div>
               <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/10 text-emerald-200 sm:flex">
                 <UploadCloud className="h-5 w-5" />
@@ -83,7 +83,7 @@ export default async function ContentLabPage({ searchParams }: { searchParams: P
               ))}
             </div>
           ) : (
-            <EmptyNotice>Upload a video or paste a link to create your first clip ideas.</EmptyNotice>
+            <EmptyNotice>Upload a video to create your first clip ideas.</EmptyNotice>
           )}
         </section>
       </div>
