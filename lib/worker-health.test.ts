@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { describeVideoProcessingState, formatWorkerLastSeen, isWorkerConnected } from "@/lib/worker-health";
+import { createLocalMediaUrl } from "@/lib/local-media";
 import type { WorkerHeartbeat } from "@/lib/types";
 
 const heartbeat: WorkerHeartbeat = {
@@ -15,6 +16,13 @@ const heartbeat: WorkerHeartbeat = {
 };
 
 describe("worker health", () => {
+  it("builds encoded loopback URLs only for safe local media paths", () => {
+    expect(createLocalMediaUrl("video-1/clips/clip-1/ready clip.mp4", "http://127.0.0.1:43120/"))
+      .toBe("http://127.0.0.1:43120/media/video-1/clips/clip-1/ready%20clip.mp4");
+    expect(createLocalMediaUrl("../outside.mp4", "http://127.0.0.1:43120")).toBeNull();
+    expect(createLocalMediaUrl("/absolute.mp4", "http://127.0.0.1:43120")).toBeNull();
+  });
+
   it("marks a fresh heartbeat as connected", () => {
     expect(isWorkerConnected(heartbeat, new Date("2026-07-05T12:00:00.000Z"))).toBe(true);
     expect(formatWorkerLastSeen(heartbeat, new Date("2026-07-05T12:00:00.000Z"))).toBe("40s ago");

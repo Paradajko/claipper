@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { demoClips, demoScheduledPosts, demoSources } from "@/lib/demo-data";
+import { createLocalMediaUrl } from "@/lib/local-media";
 import type { ClipIdea, ClipStatus, ClipWithSchedule, ScheduledPost, SourceVideo, StreamVideo, StreamVideoDetail, WorkerHeartbeat } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -89,6 +90,9 @@ export async function getStreamVideo(id: string): Promise<StreamVideoDetail | nu
 }
 
 export async function createStorageSignedUrl(bucket: string | null | undefined, storagePath: string | null | undefined, expiresIn = 3600) {
+  if (bucket === "local") {
+    return createLocalMediaUrl(storagePath, process.env.NEXT_PUBLIC_CLAIPPER_AGENT_URL);
+  }
   const supabase = getSupabaseAdmin();
   if (!supabase || !bucket || !storagePath) return null;
 
