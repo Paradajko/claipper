@@ -48,11 +48,12 @@ export function calculateCampaign(
     clipper: resolveSourceMetrics("clipper", automatic, overrides),
   };
   const uniqueClips = validProduct(inputs.clips_per_day, inputs.campaign_duration_days);
-  const totalAccounts =
-    inputs.tiktok_account_count +
-    inputs.instagram_account_count +
-    inputs.youtube_shorts_account_count;
-  const totalUploads = uniqueClips === null ? null : uniqueClips * totalAccounts;
+  const totalAccounts = finiteSum(
+    inputs.tiktok_account_count,
+    inputs.instagram_account_count,
+    inputs.youtube_shorts_account_count,
+  );
+  const totalUploads = finiteProduct(uniqueClips, totalAccounts);
   const requiredTotalViews = positiveDivide(
     inputs.monthly_budget_eur * 1000,
     inputs.reward_per_1000_views_eur,
@@ -91,9 +92,24 @@ function isPositive(value: number | null | undefined): value is number {
 }
 
 function positiveDivide(value: number | null, divisor: number | null) {
-  return isPositive(divisor) && Number.isFinite(value) ? Number(value) / divisor : null;
+  if (!isPositive(divisor) || !Number.isFinite(value)) return null;
+
+  const quotient = Number(value) / divisor;
+  return Number.isFinite(quotient) ? quotient : null;
 }
 
 function validProduct(first: number, second: number) {
-  return isPositive(first) && isPositive(second) ? first * second : null;
+  return isPositive(first) && isPositive(second) ? finiteProduct(first, second) : null;
+}
+
+function finiteSum(...values: number[]) {
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return Number.isFinite(total) && values.every(Number.isFinite) ? total : null;
+}
+
+function finiteProduct(first: number | null, second: number | null) {
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+
+  const product = Number(first) * Number(second);
+  return Number.isFinite(product) ? product : null;
 }

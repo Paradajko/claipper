@@ -51,9 +51,16 @@ describe("campaign calculations", () => {
     expect(selectCampaignBenchmark({}, null).source).toBe("none");
   });
 
-  it("rates exact median as realistic and over three times median as unrealistic", () => {
-    const realistic = calculateCampaign(base, { clipper: { shorts_median_views: 12_346 } } as never, {});
+  it("rates an exact benchmark match as realistic and over three times median as unrealistic", () => {
+    const exactRequiredViewsPerUpload =
+      (base.monthly_budget_eur * 1000 / base.reward_per_1000_views_eur) / 540;
+    const realistic = calculateCampaign(
+      base,
+      { clipper: { shorts_median_views: exactRequiredViewsPerUpload } } as never,
+      {},
+    );
     const unrealistic = calculateCampaign(base, { clipper: { shorts_median_views: 4_000 } } as never, {});
+    expect(realistic.required_views_per_upload).toBe(exactRequiredViewsPerUpload);
     expect(realistic.rating).toBe("realistické");
     expect(unrealistic.rating).toBe("nereálne");
   });
@@ -83,5 +90,23 @@ describe("campaign calculations", () => {
     const result = calculateCampaign({ ...base, monthly_budget_eur: Number.NaN }, {}, {});
     expect(result.required_total_views).toBeNull();
     expect(result.required_views_per_upload).toBeNull();
+  });
+
+  it("returns null aggregate counts for NaN and Infinity account inputs", () => {
+    const nanAccounts = calculateCampaign(
+      { ...base, tiktok_account_count: Number.NaN },
+      {},
+      {},
+    );
+    const infiniteAccounts = calculateCampaign(
+      { ...base, instagram_account_count: Number.POSITIVE_INFINITY },
+      {},
+      {},
+    );
+
+    expect(nanAccounts.total_accounts).toBeNull();
+    expect(nanAccounts.total_uploads).toBeNull();
+    expect(infiniteAccounts.total_accounts).toBeNull();
+    expect(infiniteAccounts.total_uploads).toBeNull();
   });
 });
