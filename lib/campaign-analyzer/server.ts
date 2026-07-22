@@ -1,0 +1,57 @@
+import { getSupabaseAdmin } from "@/lib/supabase";
+import type { CampaignAnalysis, CampaignInputs, CampaignManualOverrides } from "./types";
+
+export class CampaignAnalyzerUnavailableError extends Error {
+  constructor() {
+    super("Campaign Analyzer requires Supabase.");
+  }
+}
+
+type CampaignInput = CampaignInputs & { manual_overrides: CampaignManualOverrides };
+
+export async function listCampaignAnalyses(client = getSupabaseAdmin()) {
+  if (!client) throw new CampaignAnalyzerUnavailableError();
+  const { data, error } = await client.from("campaign_analyses").select("*").order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CampaignAnalysis[];
+}
+
+export async function getCampaignAnalysis(id: string, client = getSupabaseAdmin()) {
+  if (!client) throw new CampaignAnalyzerUnavailableError();
+  const { data, error } = await client.from("campaign_analyses").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as CampaignAnalysis | null;
+}
+
+export async function getActiveCampaignAnalysisJob(id: string, client = getSupabaseAdmin()) {
+  if (!client) throw new CampaignAnalyzerUnavailableError();
+  const { data, error } = await client
+    .from("processing_jobs")
+    .select("*")
+    .eq("job_type", "campaign_analysis")
+    .in("status", ["queued", "running"])
+    .contains("raw_data", { campaign_analysis_id: id })
+    .order("created_at", { ascending: false })
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function saveCampaignAnalysis(input: CampaignInput, id?: string, client = getSupabaseAdmin()) {
+  if (!client) throw new CampaignAnalyzerUnavailableError();
+  if (id) {
+    const { data, error } = await client.from("campaign_analyses").update(input).eq("id", id).select("*").single();
+    if (error || !data) throw new Error(error?.message ?? "Campaign analysis was not found.");
+    return data as CampaignAnalysis;
+  }
+  const { data, error } = await client.from("campaign_analyses").insert(input).select("*").single();
+  if (error || !data) throw new Error(error?.message ?? "Campaign analysis was not created.");
+  return data as CampaignAnalysis;
+}
+
+export async function queueCampaignAnalysis(id: string, client = getSupabaseAdmin()) {
+  if (!client) throw new CampaignAnalyzerUnavailableError();
+  const { data, error } = await client.rpc("queue_campaign_analysis", { p_analysis_id: id }).single();
+  if (error || !data) throw new Error(error?.message ?? "Campaign analysis job was not created.");
+  return data;
+}
