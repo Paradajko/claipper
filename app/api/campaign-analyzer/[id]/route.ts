@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
-import { CampaignAnalyzerUnavailableError, getActiveCampaignAnalysisJob, getCampaignAnalysis, saveCampaignAnalysis } from "@/lib/campaign-analyzer/server";
-import { campaignUpdateSchema } from "@/lib/campaign-analyzer/validation";
+import { CampaignAnalyzerUnavailableError, getActiveCampaignAnalysisJob, getCampaignAnalysis, projectCampaignInput, saveCampaignAnalysis } from "@/lib/campaign-analyzer/server";
+import { campaignInputSchema, campaignUpdateSchema } from "@/lib/campaign-analyzer/validation";
 
 export const runtime = "nodejs";
 
@@ -32,7 +32,8 @@ export async function PATCH(request: Request, { params }: Context) {
     const { id } = await params;
     const existing = await getCampaignAnalysis(id);
     if (!existing) return NextResponse.json({ error: "Campaign analysis not found." }, { status: 404 });
-    const analysis = await saveCampaignAnalysis({ ...existing, ...parsed.data }, id);
+    const input = campaignInputSchema.parse({ ...projectCampaignInput(existing), ...parsed.data });
+    const analysis = await saveCampaignAnalysis(input, id);
     return NextResponse.json({ analysis });
   } catch (error) {
     return failureResponse(error);

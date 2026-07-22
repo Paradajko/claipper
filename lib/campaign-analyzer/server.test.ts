@@ -31,7 +31,12 @@ function createFakeSupabase({ rpcResult }: { rpcResult?: unknown } = {}) {
     },
     update(values: unknown) {
       calls.push({ method: "update", table, values });
-      return { eq: (id: string) => ({ select: () => ({ single: async () => ({ data: { ...row, id }, error: null }) }) }) };
+      return {
+        eq(column: string, id: string) {
+          calls.push({ method: "eq", table, args: { column, value: id } });
+          return { select: () => ({ single: async () => ({ data: { ...row, id }, error: null }) }) };
+        }
+      };
     }
   });
   return {
@@ -68,8 +73,18 @@ describe("campaign analysis persistence", () => {
 
   it("updates an existing analysis without inserting", async () => {
     const fake = createFakeSupabase();
-    await saveCampaignAnalysis(validInput, "analysis-1", fake as never);
-    expect(fake.calls).toContainEqual(expect.objectContaining({ method: "update", table: "campaign_analyses" }));
+    await saveCampaignAnalysis({
+      ...validInput,
+      id: "analysis-1",
+      status: "completed",
+      automatic_metadata: { youtube: { median_views: 999 } },
+      source_statuses: { youtube: { status: "completed" } },
+      created_at: "server-created",
+      updated_at: "server-updated",
+      error_message: "server-error"
+    } as never, "analysis-1", fake as never);
+    expect(fake.calls).toContainEqual({ method: "update", table: "campaign_analyses", values: validInput });
+    expect(fake.calls).toContainEqual({ method: "eq", table: "campaign_analyses", args: { column: "id", value: "analysis-1" } });
     expect(fake.calls.some((call) => call.method === "insert")).toBe(false);
   });
 

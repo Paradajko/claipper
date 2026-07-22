@@ -9,6 +9,25 @@ export class CampaignAnalyzerUnavailableError extends Error {
 
 type CampaignInput = CampaignInputs & { manual_overrides: CampaignManualOverrides };
 
+export function projectCampaignInput(input: CampaignInput): CampaignInput {
+  return {
+    creator_name: input.creator_name,
+    youtube_url: input.youtube_url,
+    kick_url: input.kick_url,
+    clipper_youtube_url: input.clipper_youtube_url,
+    monthly_budget_eur: input.monthly_budget_eur,
+    reward_per_1000_views_eur: input.reward_per_1000_views_eur,
+    tiktok_account_count: input.tiktok_account_count,
+    instagram_account_count: input.instagram_account_count,
+    youtube_shorts_account_count: input.youtube_shorts_account_count,
+    clips_per_day: input.clips_per_day,
+    campaign_duration_days: input.campaign_duration_days,
+    content_hours_per_good_clip: input.content_hours_per_good_clip,
+    manual_expected_views_per_upload: input.manual_expected_views_per_upload,
+    manual_overrides: input.manual_overrides
+  };
+}
+
 export async function listCampaignAnalyses(client = getSupabaseAdmin()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const { data, error } = await client.from("campaign_analyses").select("*").order("updated_at", { ascending: false });
@@ -39,12 +58,13 @@ export async function getActiveCampaignAnalysisJob(id: string, client = getSupab
 
 export async function saveCampaignAnalysis(input: CampaignInput, id?: string, client = getSupabaseAdmin()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
+  const values = projectCampaignInput(input);
   if (id) {
-    const { data, error } = await client.from("campaign_analyses").update(input).eq("id", id).select("*").single();
+    const { data, error } = await client.from("campaign_analyses").update(values).eq("id", id).select("*").single();
     if (error || !data) throw new Error(error?.message ?? "Campaign analysis was not found.");
     return data as CampaignAnalysis;
   }
-  const { data, error } = await client.from("campaign_analyses").insert(input).select("*").single();
+  const { data, error } = await client.from("campaign_analyses").insert(values).select("*").single();
   if (error || !data) throw new Error(error?.message ?? "Campaign analysis was not created.");
   return data as CampaignAnalysis;
 }

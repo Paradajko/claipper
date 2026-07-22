@@ -14,6 +14,12 @@ describe("campaign analyzer route contracts", () => {
       expect(source).toContain("isAuthenticated");
       expect(source).toContain('status: 401');
     }
+    const itemRoute = readFileSync(routes[1], "utf8");
+    for (const handler of ["GET", "PATCH"]) {
+      const body = itemRoute.slice(itemRoute.indexOf(`export async function ${handler}`), itemRoute.indexOf("\n}", itemRoute.indexOf(`export async function ${handler}`)) + 2);
+      expect(body.indexOf("isAuthenticated")).toBeGreaterThan(-1);
+      expect(body.indexOf("isAuthenticated")).toBeLessThan(body.indexOf(handler === "GET" ? "getCampaignAnalysis" : "campaignUpdateSchema.safeParse"));
+    }
   });
 
   it("uses validation and reports invalid or unavailable services", () => {
@@ -32,5 +38,13 @@ describe("campaign analyzer route contracts", () => {
     const source = readFileSync("app/api/campaign-analyzer/[id]/analyze/route.ts", "utf8");
     expect(source).toContain("queueCampaignAnalysis");
     expect(source).not.toContain('from("processing_jobs")');
+  });
+
+  it("preserves success and not-found response contracts", () => {
+    expect(readFileSync(routes[0], "utf8")).toContain("status: 201");
+    const itemRoute = readFileSync(routes[1], "utf8");
+    expect(itemRoute).toContain("activeJob");
+    expect(itemRoute).toContain("status: 404");
+    expect(readFileSync(routes[2], "utf8")).toContain("status: 202");
   });
 });
