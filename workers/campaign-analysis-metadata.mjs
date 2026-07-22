@@ -36,6 +36,30 @@ export function safeCampaignSourceError() {
   return "Zdrojové metadáta sa nepodarilo načítať.";
 }
 
+export function mergeCampaignSourceResult({ automaticMetadata, sourceStatuses, result, collectedAt }) {
+  const nextAutomaticMetadata = { ...automaticMetadata };
+  if (result.status === "completed" && result.metrics) {
+    nextAutomaticMetadata[result.source] = result.metrics;
+  } else if (result.status === "not_provided") {
+    delete nextAutomaticMetadata[result.source];
+  }
+
+  const hasPreviousMetrics = automaticMetadata[result.source] !== undefined;
+  const nextStatus = result.status === "not_provided"
+    ? { status: "not_provided", error: null, collected_at: null, stale: false }
+    : {
+        status: result.status,
+        error: result.error,
+        collected_at: collectedAt,
+        stale: result.status === "failed" && hasPreviousMetrics
+      };
+
+  return {
+    automaticMetadata: nextAutomaticMetadata,
+    sourceStatuses: { ...sourceStatuses, [result.source]: nextStatus }
+  };
+}
+
 function flattenEntries(value) {
   if (Array.isArray(value)) return value.flatMap(flattenEntries);
   if (!value || typeof value !== "object") return [];

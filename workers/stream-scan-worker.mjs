@@ -8,6 +8,12 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
 import {
+  buildCampaignMetadataArgs,
+  mergeCampaignSourceResult,
+  parseCampaignMetadata,
+  safeCampaignSourceError
+} from "./campaign-analysis-metadata.mjs";
+import {
   assertValidWorkerEnv,
   checkBinaryAvailability,
   formatStartupReport,
@@ -132,7 +138,123 @@ async function runJob(job) {
     await processRenderReadyClip(job);
     return;
   }
+  if (job.job_type === "campaign_analysis") {
+    await processCampaignAnalysis(job);
+    return;
+  }
   throw new Error(`Unsupported job type: ${job.job_type}`);
+}
+
+async function processCampaignAnalysis(job) {
+  const analysisId = job.raw_data?.campaign_analysis_id;
+  if (!analysisId) throw new Error("Campaign analysis job is missing campaign_analysis_id.");
+
+  const { data: analysis, error: loadError } = await supabase
+    .from("campaign_analyses")
+    .select("*")
+    .eq("id", analysisId)
+    .single();
+  if (loadError || !analysis) throw new Error(loadError?.message ?? "Campaign analysis not found.");
+
+  const previousAutomaticMetadata = analysis.automatic_metadata ?? {};
+  const sources = [
+    { source: "youtube", url: analysis.youtube_url },
+    { source: "kick", url: analysis.kick_url },
+    { source: "clipper", url: analysis.clipper_youtube_url }
+  ];
+  let automaticMetadata = { ...previousAutomaticMetadata };
+  let sourceStatuses = { ...(analysis.source_statuses ?? {}) };
+
+  for (const descriptor of sources) {
+    sourceStatuses[descriptor.source] = descriptor.url
+      ? {
+          status: "pending",
+          error: null,
+          collected_at: sourceStatuses[descriptor.source]?.collected_at ?? null,
+          ...(previousAutomaticMetadata[descriptor.source] !== undefined ? { stale: true } : { stale: false })
+        }
+      : { status: "not_provided", error: null, collected_at: null, stale: false };
+  }
+  await persistCampaignAnalysis(analysisId, {
+    status: "analyzing",
+    automatic_metadata: automaticMetadata,
+    source_statuses: sourceStatuses,
+    error_message: null
+  });
+
+  let lastSuccessfulMetadataAt = analysis.last_successful_metadata_at ?? null;
+  const technicalFailures = [];
+  const now = new Date();
+
+  for (const descriptor of sources) {
+    const result = await collectCampaignSource({ ...descriptor, now });
+    const collectedAt = new Date().toISOString();
+    ({ automaticMetadata, sourceStatuses } = mergeCampaignSourceResult({
+      automaticMetadata,
+      sourceStatuses,
+      result,
+      collectedAt
+    }));
+    if (result.status === "completed") lastSuccessfulMetadataAt = collectedAt;
+    if (result.technicalError) technicalFailures.push(`${result.source}: ${result.technicalError}`);
+
+    await persistCampaignAnalysis(analysisId, {
+      automatic_metadata: automaticMetadata,
+      source_statuses: sourceStatuses,
+      last_successful_metadata_at: lastSuccessfulMetadataAt
+    });
+  }
+
+  const hasSourceFailure = technicalFailures.length > 0;
+  await persistCampaignAnalysis(analysisId, {
+    status: "completed",
+    automatic_metadata: automaticMetadata,
+    source_statuses: sourceStatuses,
+    last_successful_metadata_at: lastSuccessfulMetadataAt,
+    error_message: hasSourceFailure ? "Hotovo s upozornením" : null
+  });
+
+  const { error: technicalError } = await supabase
+    .from("processing_jobs")
+    .update({
+      technical_error: hasSourceFailure ? technicalFailures.join("\n") : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", job.id);
+  if (technicalError) throw new Error(technicalError.message);
+
+  await updateJob(job.id, "completed", "campaign_analysis_completed", 100);
+}
+
+async function collectCampaignSource({ source, url, now }) {
+  if (!url) return { source, status: "not_provided", metrics: null, error: null, technicalError: null };
+  try {
+    const { stdout } = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024 });
+    return {
+      source,
+      status: "completed",
+      metrics: parseCampaignMetadata(JSON.parse(stdout), { source, now }),
+      error: null,
+      technicalError: null
+    };
+  } catch (error) {
+    console.error(`[claipper-worker] campaign ${source} metadata failed`, cleanError(error));
+    return {
+      source,
+      status: "failed",
+      metrics: null,
+      error: safeCampaignSourceError(error),
+      technicalError: cleanError(error)
+    };
+  }
+}
+
+async function persistCampaignAnalysis(analysisId, values) {
+  const { error } = await supabase
+    .from("campaign_analyses")
+    .update({ ...values, updated_at: new Date().toISOString() })
+    .eq("id", analysisId);
+  if (error) throw new Error(error.message);
 }
 
 async function processPlatformImport(job) {
@@ -649,7 +771,7 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
   if (status === "completed") timestamps.completed_at = new Date().toISOString();
   if (status === "failed") timestamps.failed_at = new Date().toISOString();
 
-  await supabase
+  const { error: jobUpdateError } = await supabase
     .from("processing_jobs")
     .update({
       status,
@@ -661,6 +783,7 @@ async function updateJob(jobId, status, step, progressPercent, errorMessage = nu
       updated_at: new Date().toISOString()
     })
     .eq("id", jobId);
+  if (jobUpdateError) throw new Error(jobUpdateError.message);
 }
 
 async function failJob(job, error) {
@@ -681,6 +804,13 @@ async function failJob(job, error) {
       updated_at: new Date().toISOString()
     })
     .eq("id", job.id);
+  if (job.raw_data?.campaign_analysis_id) {
+    const { error: campaignFailureError } = await supabase
+      .from("campaign_analyses")
+      .update({ status: "failed", error_message: userError, updated_at: new Date().toISOString() })
+      .eq("id", job.raw_data.campaign_analysis_id);
+    if (campaignFailureError) throw new Error(campaignFailureError.message);
+  }
   if (job.video_id) {
     await updateVideo(job.video_id, "failed", 100, userError, technicalError);
   }
