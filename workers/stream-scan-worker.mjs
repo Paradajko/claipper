@@ -791,7 +791,7 @@ async function failJob(job, error) {
   const userError = userFriendlyWorkerError(error);
   console.error(`[claipper-worker] job ${job.id} failed`, technicalError);
   activeStep = "failed";
-  await supabase
+  const { error: jobFailureError } = await supabase
     .from("processing_jobs")
     .update({
       status: "failed",
@@ -818,6 +818,7 @@ async function failJob(job, error) {
     await supabase.from("clips").update({ render_status: "failed", updated_at: new Date().toISOString() }).eq("id", job.clip_id);
   }
   await updateHeartbeat("online", null, "failed");
+  if (jobFailureError) throw new Error(jobFailureError.message);
 }
 
 async function makeWorkDir(id) {

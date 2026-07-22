@@ -29,4 +29,20 @@ describe("campaign analysis worker integration", () => {
     expect(worker).toMatch(/async function updateJob[\s\S]*if \(jobUpdateError\) throw new Error\(jobUpdateError\.message\)/);
     expect(worker).toMatch(/async function failJob[\s\S]*job\.raw_data\?\.campaign_analysis_id[\s\S]*\.from\("campaign_analyses"\)[\s\S]*status: "failed"/);
   });
+
+  it("propagates failed-job persistence errors after all cleanup attempts", () => {
+    const failJob = worker.slice(worker.indexOf("async function failJob"), worker.indexOf("async function makeWorkDir"));
+    const orderedTokens = [
+      "const { error: jobFailureError } = await supabase",
+      'if (job.raw_data?.campaign_analysis_id)',
+      "if (job.video_id)",
+      "if (job.clip_id)",
+      'await updateHeartbeat("online", null, "failed")',
+      "if (jobFailureError) throw new Error(jobFailureError.message)"
+    ];
+    const positions = orderedTokens.map((token) => failJob.indexOf(token));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+  });
 });
