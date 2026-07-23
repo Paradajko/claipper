@@ -32,5 +32,7 @@ describe("Campaign Analyzer workspace", () => {
     expect(source).toContain("save({ navigate: false })");
     expect(source).toContain("disabled={analysis?.status === \"analyzing\"}");
     expect(source).toContain('step={integer ? "1" : "any"}');
+    expect(source).toContain("campaignInputSchema.safeParse(draft)");
+    expect(source).toContain("fieldErrors");
   });
 });

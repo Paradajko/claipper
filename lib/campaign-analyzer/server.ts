@@ -9,6 +9,10 @@ export class CampaignAnalyzerUnavailableError extends Error {
 
 type CampaignInput = CampaignInputs & { manual_overrides: CampaignManualOverrides };
 
+function getCampaignAnalyzerClient() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : null;
+}
+
 export function projectCampaignInput(input: CampaignInput): CampaignInput {
   return {
     creator_name: input.creator_name,
@@ -28,21 +32,21 @@ export function projectCampaignInput(input: CampaignInput): CampaignInput {
   };
 }
 
-export async function listCampaignAnalyses(client = getSupabaseAdmin()) {
+export async function listCampaignAnalyses(client = getCampaignAnalyzerClient()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const { data, error } = await client.from("campaign_analyses").select("*").order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as CampaignAnalysis[];
 }
 
-export async function getCampaignAnalysis(id: string, client = getSupabaseAdmin()) {
+export async function getCampaignAnalysis(id: string, client = getCampaignAnalyzerClient()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const { data, error } = await client.from("campaign_analyses").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   return data as CampaignAnalysis | null;
 }
 
-export async function getActiveCampaignAnalysisJob(id: string, client = getSupabaseAdmin()) {
+export async function getActiveCampaignAnalysisJob(id: string, client = getCampaignAnalyzerClient()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const { data, error } = await client
     .from("processing_jobs")
@@ -56,7 +60,7 @@ export async function getActiveCampaignAnalysisJob(id: string, client = getSupab
   return data;
 }
 
-export async function saveCampaignAnalysis(input: CampaignInput, id?: string, client = getSupabaseAdmin()) {
+export async function saveCampaignAnalysis(input: CampaignInput, id?: string, client = getCampaignAnalyzerClient()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const values = projectCampaignInput(input);
   if (id) {
@@ -69,7 +73,7 @@ export async function saveCampaignAnalysis(input: CampaignInput, id?: string, cl
   return data as CampaignAnalysis;
 }
 
-export async function queueCampaignAnalysis(id: string, client = getSupabaseAdmin()) {
+export async function queueCampaignAnalysis(id: string, client = getCampaignAnalyzerClient()) {
   if (!client) throw new CampaignAnalyzerUnavailableError();
   const { data, error } = await client.rpc("queue_campaign_analysis", { p_analysis_id: id }).single();
   if (error || !data) throw new Error(error?.message ?? "Campaign analysis job was not created.");

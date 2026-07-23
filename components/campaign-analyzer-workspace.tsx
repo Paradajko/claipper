@@ -8,6 +8,7 @@ import { CampaignAnalyzerFields } from "@/components/campaign-analyzer-fields";
 import { CampaignAnalyzerResults } from "@/components/campaign-analyzer-results";
 import { Card } from "@/components/ui";
 import { calculateCampaign } from "@/lib/campaign-analyzer/calculations";
+import { campaignInputSchema } from "@/lib/campaign-analyzer/validation";
 import type { CampaignAnalysis, CampaignInputs, CampaignManualOverrides, CampaignSource, SourceMetrics } from "@/lib/campaign-analyzer/types";
 
 type Draft = CampaignInputs & { manual_overrides: CampaignManualOverrides };
@@ -26,6 +27,7 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
   const [savedAnalyses, setSavedAnalyses] = useState(analyses);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const result = useMemo(() => calculateCampaign(draft, analysis?.automatic_metadata ?? {}, draft.manual_overrides), [draft, analysis?.automatic_metadata]);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
     return () => { controller.abort(); clearInterval(timer); };
   }, [analysis?.id, analysis?.status]);
 
-  function updateDraft(key: keyof Draft, value: string | number | null | CampaignManualOverrides) { setDraft((current) => ({ ...current, [key]: value } as Draft)); }
+  function updateDraft(key: keyof Draft, value: string | number | null | CampaignManualOverrides) { setFieldErrors((current) => ({ ...current, [String(key)]: "" })); setDraft((current) => ({ ...current, [key]: value } as Draft)); }
   function updateOverride(source: CampaignSource, metric: keyof SourceMetrics, value: number | null) {
     setDraft((current) => {
       const sourceValues = { ...(current.manual_overrides[source] ?? {}) };
@@ -60,11 +62,17 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
   }
 
   async function save({ navigate = true }: { navigate?: boolean } = {}) {
+    const parsed = campaignInputSchema.safeParse(draft);
+    if (!parsed.success) {
+      const fieldErrors = Object.fromEntries(Object.entries(parsed.error.flatten().fieldErrors).map(([key, messages]) => [key, messages?.[0] ?? "Neplatná hodnota."]));
+      setFieldErrors(fieldErrors); setError("Skontroluj označené polia."); return null;
+    }
     setBusy(true); setError(null);
     try {
-      const response = await fetch(analysis?.id ? `/api/campaign-analyzer/${analysis.id}` : "/api/campaign-analyzer", { method: analysis?.id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(draft) });
+      const response = await fetch(analysis?.id ? `/api/campaign-analyzer/${analysis.id}` : "/api/campaign-analyzer", { method: analysis?.id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(parsed.data) });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Uloženie zlyhalo.");
+      if (!response.ok) { if (payload.fields?.fieldErrors) setFieldErrors(Object.fromEntries(Object.entries(payload.fields.fieldErrors).map(([key, messages]) => [key, Array.isArray(messages) ? String(messages[0] ?? "") : ""]))); throw new Error(payload.error ?? "Uloženie zlyhalo."); }
+      setFieldErrors({});
       setAnalysis(payload.analysis); setDraft(toDraft(payload.analysis));
       setSavedAnalyses((current) => [payload.analysis, ...current.filter((item) => item.id !== payload.analysis.id)].slice(0, 20));
       if (!analysis?.id && navigate) router.replace(`/app/campaign-analyzer?id=${payload.analysis.id}`);
@@ -95,6 +103,6 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
     </div>
     {error ? <p className="rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">{error}</p> : null}
     {savedAnalyses.length ? <div className="flex gap-2 overflow-x-auto pb-1">{savedAnalyses.map((item) => <Link key={item.id} href={`/app/campaign-analyzer?id=${item.id}`} className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300">{item.creator_name}</Link>)}</div> : null}
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"><Card><fieldset disabled={analysis?.status === "analyzing"} className="disabled:opacity-70"><CampaignAnalyzerFields draft={draft} automatic={analysis?.automatic_metadata ?? {}} statuses={analysis?.source_statuses ?? {}} onDraft={updateDraft} onOverride={updateOverride} /></fieldset></Card><CampaignAnalyzerResults result={result} /></div>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"><Card><fieldset disabled={analysis?.status === "analyzing"} className="disabled:opacity-70"><CampaignAnalyzerFields draft={draft} automatic={analysis?.automatic_metadata ?? {}} statuses={analysis?.source_statuses ?? {}} onDraft={updateDraft} onOverride={updateOverride} errors={fieldErrors} /></fieldset></Card><CampaignAnalyzerResults result={result} /></div>
   </div>;
 }

@@ -62,6 +62,15 @@ describe("campaign analysis validation", () => {
   it("rejects arbitrary manual override keys", () => {
     expect(campaignInputSchema.safeParse({ ...validInput, manual_overrides: { youtube: { arbitrary: 1 } } }).success).toBe(false);
   });
+
+  it("restricts worker-bound URLs to public YouTube and Kick hosts", () => {
+    for (const youtube_url of ["http://127.0.0.1/admin", "https://youtube.com.evil.test/x", "file:///tmp/secret"]) {
+      expect(campaignInputSchema.safeParse({ ...validInput, youtube_url }).success).toBe(false);
+    }
+    expect(campaignInputSchema.safeParse({ ...validInput, youtube_url: "https://youtu.be/abc" }).success).toBe(true);
+    expect(campaignInputSchema.safeParse({ ...validInput, kick_url: "https://kick.com/creator" }).success).toBe(true);
+    expect(campaignInputSchema.safeParse({ ...validInput, kick_url: "https://example.com/creator" }).success).toBe(false);
+  });
 });
 
 describe("campaign analysis persistence", () => {

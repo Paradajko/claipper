@@ -229,7 +229,7 @@ async function processCampaignAnalysis(job) {
 async function collectCampaignSource({ source, url, now }) {
   if (!url) return { source, status: "not_provided", metrics: null, error: null, technicalError: null };
   try {
-    const { stdout } = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024 });
+    const { stdout } = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024, timeout: 120_000 });
     return {
       source,
       status: "completed",

@@ -6,15 +6,16 @@ import type { CampaignAutomaticMetadata, CampaignInputs, CampaignManualOverrides
 const inputClass = "h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white outline-none focus:border-emerald-400/60";
 type Draft = CampaignInputs & { manual_overrides: CampaignManualOverrides };
 
-export function CampaignAnalyzerFields({ draft, automatic, statuses, onDraft, onOverride }: {
+export function CampaignAnalyzerFields({ draft, automatic, statuses, onDraft, onOverride, errors }: {
   draft: Draft;
   automatic: CampaignAutomaticMetadata;
   statuses: Partial<Record<CampaignSource, SourceCollectionState>>;
   onDraft: (key: keyof Draft, value: string | number | null | CampaignManualOverrides) => void;
   onOverride: (source: CampaignSource, metric: keyof SourceMetrics, value: number | null) => void;
+  errors?: Record<string, string>;
 }) {
-  const text = (label: string, key: keyof Draft, value: string | null, placeholder = "") => <Field label={label}><input className={inputClass} value={value ?? ""} placeholder={placeholder} onChange={(e) => onDraft(key, e.target.value || null)} /></Field>;
-  const number = (label: string, key: keyof Draft, value: number | null, integer = false, optional = false) => <Field label={label}><input className={inputClass} type="number" min="0" step={integer ? "1" : "any"} value={value ?? ""} onChange={(e) => onDraft(key, e.target.value === "" ? (optional ? null : 0) : integer ? Math.trunc(Number(e.target.value)) : Number(e.target.value))} /></Field>;
+  const text = (label: string, key: keyof Draft, value: string | null, placeholder = "") => <Field label={label} error={errors?.[String(key)]}><input className={inputClass} value={value ?? ""} placeholder={placeholder} onChange={(e) => onDraft(key, e.target.value || null)} /></Field>;
+  const number = (label: string, key: keyof Draft, value: number | null, integer = false, optional = false) => <Field label={label} error={errors?.[String(key)]}><input className={inputClass} type="number" min="0" step={integer ? "1" : "any"} value={value ?? ""} onChange={(e) => onDraft(key, e.target.value === "" ? (optional ? null : 0) : integer ? Math.trunc(Number(e.target.value)) : Number(e.target.value))} /></Field>;
   return <div className="space-y-7">
     <Section title="Kampaň"><div className="grid gap-3 sm:grid-cols-2">
       {text("Meno creatora", "creator_name", draft.creator_name)}
@@ -59,4 +60,4 @@ function SourceEditor({ source, automatic, overrides, state, onOverride }: { sou
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section><h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-emerald-300">{title}</h2>{children}</section>; }
-function Field({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) { return <label className="grid gap-1 text-xs text-slate-300"><span className="flex justify-between gap-2"><span>{label}</span>{note ? <span className="text-[10px] text-slate-500">{note}</span> : null}</span>{children}</label>; }
+function Field({ label, note, error, children }: { label: string; note?: string; error?: string; children: React.ReactNode }) { return <label className="grid gap-1 text-xs text-slate-300"><span className="flex justify-between gap-2"><span>{label}</span>{note ? <span className="text-[10px] text-slate-500">{note}</span> : null}</span>{children}{error ? <span className="text-[11px] text-rose-300">{error}</span> : null}</label>; }
