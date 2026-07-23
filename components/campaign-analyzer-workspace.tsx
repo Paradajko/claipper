@@ -59,7 +59,7 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
     });
   }
 
-  async function save() {
+  async function save({ navigate = true }: { navigate?: boolean } = {}) {
     setBusy(true); setError(null);
     try {
       const response = await fetch(analysis?.id ? `/api/campaign-analyzer/${analysis.id}` : "/api/campaign-analyzer", { method: analysis?.id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(draft) });
@@ -67,7 +67,7 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
       if (!response.ok) throw new Error(payload.error ?? "Uloženie zlyhalo.");
       setAnalysis(payload.analysis); setDraft(toDraft(payload.analysis));
       setSavedAnalyses((current) => [payload.analysis, ...current.filter((item) => item.id !== payload.analysis.id)].slice(0, 20));
-      if (!analysis?.id) router.replace(`/app/campaign-analyzer?id=${payload.analysis.id}`);
+      if (!analysis?.id && navigate) router.replace(`/app/campaign-analyzer?id=${payload.analysis.id}`);
       return payload.analysis as CampaignAnalysis;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Uloženie zlyhalo."); return null; }
     finally { setBusy(false); }
@@ -75,12 +75,14 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
 
   async function analyze() {
     if (busy || analysis?.status === "analyzing") return;
-    const saved = await save(); if (!saved) return;
+    const wasNew = !analysis?.id;
+    const saved = await save({ navigate: false }); if (!saved) return;
     setBusy(true); setError(null);
     try {
       const response = await fetch(`/api/campaign-analyzer/${saved.id}/analyze`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(draft) });
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error ?? "Analýza zlyhala.");
       setAnalysis({ ...payload.analysis, status: "analyzing" });
+      if (wasNew) router.replace(`/app/campaign-analyzer?id=${saved.id}`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Analýza zlyhala."); }
     finally { setBusy(false); }
   }

@@ -29,6 +29,7 @@ describe("Campaign Analyzer workspace", () => {
     expect(source).toContain("Hotovo s upozornením");
     expect(source).toContain("AbortController");
     expect(source).toContain("router.replace");
+    expect(source).toContain("save({ navigate: false })");
     expect(source).toContain("disabled={analysis?.status === \"analyzing\"}");
     expect(source).toContain('step={integer ? "1" : "any"}');
   });
