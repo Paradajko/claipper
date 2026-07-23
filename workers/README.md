@@ -21,3 +21,9 @@ Required environment:
 The worker polls `processing_jobs`, downloads source files from Supabase Storage, runs FFmpeg/OpenAI analysis, writes transcript segments and clip ideas to Postgres, and uploads rendered draft clips back to Supabase Storage.
 
 The worker also updates `worker_heartbeats` every 15 seconds so Content Lab can show whether processing is connected or offline.
+
+## Campaign Analyzer
+
+Campaign Analyzer uses the same worker poll loop and `processing_jobs` table through the `campaign_analysis` job type. It invokes yt-dlp only for public metadata with `--skip-download --dump-single-json`; it writes no video, audio, subtitles, or thumbnails.
+
+YouTube, Kick, and the optional clipper channel are processed independently. One source failure does not stop the others, and a failed refresh preserves earlier successful metadata as stale. This feature uses neither OpenAI nor the YouTube API and needs no new API key.
