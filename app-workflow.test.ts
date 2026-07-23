@@ -410,4 +410,11 @@ describe("AI-first app workflow naming", () => {
     expect(settings).toContain("break-all");
     expect(settings).toContain("sm:flex-row");
   });
+
+  it("adds Campaign Analyzer to the existing navigation without a mobile primary slot", () => {
+    const shell = read("components/ui.tsx");
+    expect(shell).toContain('label: "Campaign Analyzer"');
+    expect(shell).toContain('href: "/app/campaign-analyzer"');
+    expect(shell).not.toContain('href: "/app/campaign-analyzer", label: "Campaign Analyzer", mobileLabel: "Analyzer", icon: Gauge, mobilePrimary: true');
+  });
 });

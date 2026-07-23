@@ -1,8 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
+import React from "react";
 import { clsx } from "clsx";
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, CalendarClock, Clapperboard, FileText, Home, Library, Menu, Settings } from "lucide-react";
+import { BarChart3, CalendarClock, Clapperboard, FileText, Gauge, Home, Library, Menu, Settings } from "lucide-react";
 import type { ClipStatus } from "@/lib/types";
 
 export const statusMeta: Record<ClipStatus, { label: string; className: string }> = {
@@ -62,6 +63,7 @@ const navItems: Array<{ href: string; label: string; mobileLabel: string; icon: 
   { href: "/app/mylaura-brief", label: "MyLaura Brief", mobileLabel: "Brief", icon: FileText, mobilePrimary: true },
   { href: "/app/content-lab", label: "Content Lab", mobileLabel: "Lab", icon: Library, mobilePrimary: true },
   { href: "/app/clips", label: "Clips", mobileLabel: "Clips", icon: Clapperboard, mobilePrimary: true },
+  { href: "/app/campaign-analyzer", label: "Campaign Analyzer", mobileLabel: "Analyzer", icon: Gauge },
   { href: "/app/schedule", label: "Schedule", mobileLabel: "Schedule", icon: CalendarClock },
   { href: "/app/reports", label: "Reports", mobileLabel: "Reports", icon: BarChart3 },
   { href: "/app/settings", label: "Settings", mobileLabel: "Settings", icon: Settings }
