@@ -3,6 +3,7 @@
 import Link from "next/link";
 import React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CampaignAnalyzerFields } from "@/components/campaign-analyzer-fields";
 import { CampaignAnalyzerResults } from "@/components/campaign-analyzer-results";
 import { Card } from "@/components/ui";
@@ -19,22 +20,33 @@ function toDraft(value: CampaignAnalysis | null): Draft {
 }
 
 export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analyses: CampaignAnalysis[]; initialAnalysis: CampaignAnalysis | null }) {
+  const router = useRouter();
   const [analysis, setAnalysis] = useState(initialAnalysis);
   const [draft, setDraft] = useState<Draft>(() => toDraft(initialAnalysis));
+  const [savedAnalyses, setSavedAnalyses] = useState(analyses);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const result = useMemo(() => calculateCampaign(draft, analysis?.automatic_metadata ?? {}, draft.manual_overrides), [draft, analysis?.automatic_metadata]);
 
   useEffect(() => {
+    setAnalysis(initialAnalysis);
+    setDraft(toDraft(initialAnalysis));
+    setSavedAnalyses(analyses);
+  }, [analyses, initialAnalysis]);
+
+  useEffect(() => {
     if (!analysis?.id || analysis.status !== "analyzing") return;
+    const controller = new AbortController();
     const timer = setInterval(async () => {
-      const response = await fetch(`/api/campaign-analyzer/${analysis.id}`, { cache: "no-store" });
+      const response = await fetch(`/api/campaign-analyzer/${analysis.id}`, { cache: "no-store", signal: controller.signal }).catch(() => null);
+      if (!response || controller.signal.aborted) return;
       if (!response.ok) return;
       const payload = await response.json();
+      if (controller.signal.aborted) return;
       setAnalysis(payload.analysis);
       setDraft(toDraft(payload.analysis));
     }, 2500);
-    return () => clearInterval(timer);
+    return () => { controller.abort(); clearInterval(timer); };
   }, [analysis?.id, analysis?.status]);
 
   function updateDraft(key: keyof Draft, value: string | number | null | CampaignManualOverrides) { setDraft((current) => ({ ...current, [key]: value } as Draft)); }
@@ -53,7 +65,10 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
       const response = await fetch(analysis?.id ? `/api/campaign-analyzer/${analysis.id}` : "/api/campaign-analyzer", { method: analysis?.id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(draft) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Uloženie zlyhalo.");
-      setAnalysis(payload.analysis); return payload.analysis as CampaignAnalysis;
+      setAnalysis(payload.analysis); setDraft(toDraft(payload.analysis));
+      setSavedAnalyses((current) => [payload.analysis, ...current.filter((item) => item.id !== payload.analysis.id)].slice(0, 20));
+      if (!analysis?.id) router.replace(`/app/campaign-analyzer?id=${payload.analysis.id}`);
+      return payload.analysis as CampaignAnalysis;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Uloženie zlyhalo."); return null; }
     finally { setBusy(false); }
   }
@@ -77,7 +92,7 @@ export function CampaignAnalyzerWorkspace({ analyses, initialAnalysis }: { analy
       <div className="flex flex-wrap gap-2"><button type="button" onClick={() => { setAnalysis(null); setDraft(toDraft(null)); setError(null); }} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white">Nová analýza</button><button type="button" disabled={busy} onClick={() => void save()} className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white disabled:opacity-50">Uložiť zmeny</button><button type="button" disabled={busy || analysis?.status === "analyzing"} onClick={() => void analyze()} className="rounded-md bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">Analyzovať</button></div>
     </div>
     {error ? <p className="rounded-md border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">{error}</p> : null}
-    {analyses.length ? <div className="flex gap-2 overflow-x-auto pb-1">{analyses.map((item) => <Link key={item.id} href={`/app/campaign-analyzer?id=${item.id}`} className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300">{item.creator_name}</Link>)}</div> : null}
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"><Card><CampaignAnalyzerFields draft={draft} automatic={analysis?.automatic_metadata ?? {}} statuses={analysis?.source_statuses ?? {}} onDraft={updateDraft} onOverride={updateOverride} /></Card><CampaignAnalyzerResults result={result} /></div>
+    {savedAnalyses.length ? <div className="flex gap-2 overflow-x-auto pb-1">{savedAnalyses.map((item) => <Link key={item.id} href={`/app/campaign-analyzer?id=${item.id}`} className="shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300">{item.creator_name}</Link>)}</div> : null}
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"><Card><fieldset disabled={analysis?.status === "analyzing"} className="disabled:opacity-70"><CampaignAnalyzerFields draft={draft} automatic={analysis?.automatic_metadata ?? {}} statuses={analysis?.source_statuses ?? {}} onDraft={updateDraft} onOverride={updateOverride} /></fieldset></Card><CampaignAnalyzerResults result={result} /></div>
   </div>;
 }

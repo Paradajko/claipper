@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CampaignAnalyzerWorkspace } from "./campaign-analyzer-workspace";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 describe("Campaign Analyzer workspace", () => {
   it("renders the compact Slovak editing and result workspace", () => {
@@ -25,5 +27,9 @@ describe("Campaign Analyzer workspace", () => {
     expect(source).toContain("Ručne upravené");
     expect(source).toContain("Staršie dáta");
     expect(source).toContain("Hotovo s upozornením");
+    expect(source).toContain("AbortController");
+    expect(source).toContain("router.replace");
+    expect(source).toContain("disabled={analysis?.status === \"analyzing\"}");
+    expect(source).toContain('step={integer ? "1" : "any"}');
   });
 });

@@ -14,14 +14,14 @@ export function CampaignAnalyzerFields({ draft, automatic, statuses, onDraft, on
   onOverride: (source: CampaignSource, metric: keyof SourceMetrics, value: number | null) => void;
 }) {
   const text = (label: string, key: keyof Draft, value: string | null, placeholder = "") => <Field label={label}><input className={inputClass} value={value ?? ""} placeholder={placeholder} onChange={(e) => onDraft(key, e.target.value || null)} /></Field>;
-  const number = (label: string, key: keyof Draft, value: number | null) => <Field label={label}><input className={inputClass} type="number" min="0" step="any" value={value ?? ""} onChange={(e) => onDraft(key, e.target.value === "" ? null : Number(e.target.value))} /></Field>;
+  const number = (label: string, key: keyof Draft, value: number | null, integer = false, optional = false) => <Field label={label}><input className={inputClass} type="number" min="0" step={integer ? "1" : "any"} value={value ?? ""} onChange={(e) => onDraft(key, e.target.value === "" ? (optional ? null : 0) : integer ? Math.trunc(Number(e.target.value)) : Number(e.target.value))} /></Field>;
   return <div className="space-y-7">
     <Section title="Kampaň"><div className="grid gap-3 sm:grid-cols-2">
       {text("Meno creatora", "creator_name", draft.creator_name)}
       {number("Mesačný budget (€)", "monthly_budget_eur", draft.monthly_budget_eur)}
       {number("Odmena za 1 000 views (€)", "reward_per_1000_views_eur", draft.reward_per_1000_views_eur)}
       {number("Klipov denne", "clips_per_day", draft.clips_per_day)}
-      {number("Počet dní kampane", "campaign_duration_days", draft.campaign_duration_days)}
+      {number("Počet dní kampane", "campaign_duration_days", draft.campaign_duration_days, true)}
       {number("Jeden dobrý klip každých X hodín", "content_hours_per_good_clip", draft.content_hours_per_good_clip)}
     </div></Section>
     <Section title="Kanály"><div className="grid gap-3 sm:grid-cols-2">
@@ -30,10 +30,10 @@ export function CampaignAnalyzerFields({ draft, automatic, statuses, onDraft, on
       {text("YouTube link clippera (voliteľné)", "clipper_youtube_url", draft.clipper_youtube_url, "https://youtube.com/@clipper")}
     </div></Section>
     <Section title="Distribúcia"><div className="grid gap-3 sm:grid-cols-2">
-      {number("TikTok účty", "tiktok_account_count", draft.tiktok_account_count)}
-      {number("Instagram účty", "instagram_account_count", draft.instagram_account_count)}
-      {number("YouTube Shorts účty", "youtube_shorts_account_count", draft.youtube_shorts_account_count)}
-      {number("Očakávané views na upload", "manual_expected_views_per_upload", draft.manual_expected_views_per_upload)}
+      {number("TikTok účty", "tiktok_account_count", draft.tiktok_account_count, true)}
+      {number("Instagram účty", "instagram_account_count", draft.instagram_account_count, true)}
+      {number("YouTube Shorts účty", "youtube_shorts_account_count", draft.youtube_shorts_account_count, true)}
+      {number("Očakávané views na upload", "manual_expected_views_per_upload", draft.manual_expected_views_per_upload, false, true)}
     </div></Section>
     <Section title="Zistené údaje"><div className="space-y-4">
       {(["youtube", "kick", "clipper"] as CampaignSource[]).map((source) => <SourceEditor key={source} source={source} automatic={automatic[source]} overrides={draft.manual_overrides[source]} state={statuses[source]} onOverride={onOverride} />)}
