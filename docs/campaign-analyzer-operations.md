@@ -6,7 +6,7 @@ Campaign Analyzer extends the existing Claipper app, Supabase database, and Rail
 
 After separate approval:
 
-1. Apply `supabase/migrations/007_campaign_analyzer.sql`.
+1. Apply `supabase/migrations/008_campaign_analyzer.sql`.
 2. Deploy this branch to the existing Railway worker.
 3. Deploy the app from the same branch.
 

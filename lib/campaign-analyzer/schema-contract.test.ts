@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync("supabase/migrations/007_campaign_analyzer.sql", "utf8");
+const migration = readFileSync("supabase/migrations/008_campaign_analyzer.sql", "utf8");
 
 describe("campaign analyzer schema", () => {
   it("stores durable inputs, metadata, overrides and source states", () => {
