@@ -1,10 +1,11 @@
 export function buildCampaignMetadataArgs(url) {
   return [
     "--skip-download",
-    "--dump-single-json",
     "--ignore-errors",
     "--no-warnings",
-    "--playlist-end", "200",
+    "--dateafter", "now-30days",
+    "--playlist-end", "100",
+    "--print", "%(.{id,timestamp,release_timestamp,upload_date,duration,view_count,webpage_url,is_short,is_shorts,short,extractor_key,extractor})j",
     "--", url
   ];
 }
@@ -30,6 +31,35 @@ export function parseCampaignMetadata(value, { source, now = new Date() }) {
     shorts_median_views: median(shortsViews),
     shorts_sample_size: shortsViews.length
   };
+}
+
+export function parseCampaignMetadataCommandResult({ stdout, error }) {
+  const candidate = typeof stdout === "string" && stdout.trim()
+    ? stdout
+    : typeof error?.stdout === "string"
+      ? error.stdout
+      : "";
+  if (candidate.trim()) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch {
+      const entries = candidate
+        .split(/\r?\n/)
+        .filter((line) => line.trim())
+        .flatMap((line) => {
+          try {
+            const parsed = JSON.parse(line);
+            return parsed && typeof parsed === "object" ? [parsed] : [];
+          } catch {
+            return [];
+          }
+        });
+      if (entries.length) return { entries };
+    }
+  }
+  if (error) throw error;
+  throw new Error("yt-dlp returned no metadata.");
 }
 
 export function safeCampaignSourceError() {

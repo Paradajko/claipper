@@ -13,6 +13,11 @@ export function parseCampaignMetadata(
   options: { source: CampaignSource; now?: Date }
 ): SourceMetrics;
 
+export function parseCampaignMetadataCommandResult(options: {
+  stdout?: string;
+  error?: Error & { stdout?: string };
+}): unknown;
+
 export function safeCampaignSourceError(error: unknown): string;
 
 export type CampaignSourceResult = {

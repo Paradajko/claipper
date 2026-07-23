@@ -11,6 +11,7 @@ import {
   buildCampaignMetadataArgs,
   mergeCampaignSourceResult,
   parseCampaignMetadata,
+  parseCampaignMetadataCommandResult,
   safeCampaignSourceError
 } from "./campaign-analysis-metadata.mjs";
 import {
@@ -229,11 +230,17 @@ async function processCampaignAnalysis(job) {
 async function collectCampaignSource({ source, url, now }) {
   if (!url) return { source, status: "not_provided", metrics: null, error: null, technicalError: null };
   try {
-    const { stdout } = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024, timeout: 120_000 });
+    let commandResult;
+    try {
+      commandResult = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024, timeout: 120_000 });
+    } catch (error) {
+      commandResult = { error };
+    }
+    const metadata = parseCampaignMetadataCommandResult(commandResult);
     return {
       source,
       status: "completed",
-      metrics: parseCampaignMetadata(JSON.parse(stdout), { source, now }),
+      metrics: parseCampaignMetadata(metadata, { source, now }),
       error: null,
       technicalError: null
     };

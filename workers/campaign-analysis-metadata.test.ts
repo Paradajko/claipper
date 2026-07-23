@@ -4,6 +4,7 @@ import {
   buildCampaignMetadataArgs,
   mergeCampaignSourceResult,
   parseCampaignMetadata,
+  parseCampaignMetadataCommandResult,
   safeCampaignSourceError
 } from "./campaign-analysis-metadata.mjs";
 
@@ -26,7 +27,8 @@ describe("campaign metadata", () => {
   it("builds metadata-only yt-dlp arguments", () => {
     const args = buildCampaignMetadataArgs("https://youtube.com/@creator");
     expect(args).toContain("--skip-download");
-    expect(args).toContain("--dump-single-json");
+    expect(args).toContain("--print");
+    expect(args).toContain("--dateafter");
     expect(args).toContain("--playlist-end");
     expect(args).not.toContain("--output");
     expect(args.join(" ")).not.toMatch(/--format|write-thumbnail|write-subs/);
@@ -68,6 +70,30 @@ describe("campaign metadata", () => {
 
   it("returns a concise source error without command output", () => {
     expect(safeCampaignSourceError(new Error("HTTP Error 403 with cookie=secret"))).toBe("Zdrojové metadáta sa nepodarilo načítať.");
+  });
+
+  it("uses valid partial JSON when yt-dlp exits non-zero for one unavailable playlist item", () => {
+    const partial = [
+      JSON.stringify({ id: "first", upload_date: "20260720", view_count: 500 }),
+      JSON.stringify({ id: "second", upload_date: "20260719", view_count: 700 })
+    ].join("\n");
+    const commandError = Object.assign(new Error("one age-restricted item failed"), { stdout: partial });
+
+    expect(parseCampaignMetadataCommandResult({ error: commandError })).toEqual({
+      entries: partial.split("\n").map((line) => JSON.parse(line))
+    });
+  });
+
+  it("rethrows yt-dlp failures that contain no usable metadata JSON", () => {
+    const commandError = Object.assign(new Error("extractor failed"), { stdout: "" });
+
+    expect(() => parseCampaignMetadataCommandResult({ error: commandError })).toThrow("extractor failed");
+  });
+
+  it("does not treat yt-dlp null output as successful source metadata", () => {
+    const commandError = Object.assign(new Error("channel is offline"), { stdout: "null\n" });
+
+    expect(() => parseCampaignMetadataCommandResult({ error: commandError })).toThrow("channel is offline");
   });
 
   it("retains failed source metrics as stale while replacing successful metrics", () => {
