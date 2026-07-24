@@ -24,6 +24,6 @@ The worker also updates `worker_heartbeats` every 15 seconds so Content Lab can 
 
 ## Campaign Analyzer
 
-Campaign Analyzer uses the same worker poll loop and `processing_jobs` table through the `campaign_analysis` job type. It invokes yt-dlp only for public metadata with `--skip-download --dump-single-json`; it writes no video, audio, subtitles, or thumbnails.
+Campaign Analyzer uses the same worker poll loop and `processing_jobs` table through the `campaign_analysis` job type. YouTube and clipper metadata use yt-dlp with `--skip-download`; Kick VOD metadata uses Kick's public API v2 through the Docker image's `curl_cffi` TLS impersonation. Neither path writes video, audio, subtitles, or thumbnails.
 
 YouTube, Kick, and the optional clipper channel are processed independently. One source failure does not stop the others, and a failed refresh preserves earlier successful metadata as stale. This feature uses neither OpenAI nor the YouTube API and needs no new API key.

@@ -17,7 +17,7 @@ It reuses these existing environment variables:
 - `YTDLP_PATH`
 - existing worker variables such as `WORKER_ID` and `WORKER_POLL_INTERVAL_MS`
 
-The worker invokes yt-dlp with `--skip-download --dump-single-json`. Campaign Analyzer downloads no video, audio, subtitles, or thumbnails.
+The worker invokes yt-dlp with `--skip-download` for YouTube sources. Kick channel VOD metadata comes from the public API v2 through the worker image's `curl_cffi` TLS impersonation. Campaign Analyzer downloads no video, audio, subtitles, or thumbnails.
 
 ## Manual verification
 

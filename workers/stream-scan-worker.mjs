@@ -9,9 +9,11 @@ import { createClient } from "@supabase/supabase-js";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider } from "./object-storage.mjs";
 import {
   buildCampaignMetadataArgs,
+  buildKickMetadataArgs,
   mergeCampaignSourceResult,
   parseCampaignMetadata,
   parseCampaignMetadataCommandResult,
+  parseKickMetadata,
   safeCampaignSourceError
 } from "./campaign-analysis-metadata.mjs";
 import {
@@ -232,7 +234,9 @@ async function collectCampaignSource({ source, url, now }) {
   try {
     let commandResult;
     try {
-      commandResult = await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024, timeout: 120_000 });
+      commandResult = source === "kick"
+        ? await execFileAsync("python3", buildKickMetadataArgs(url), { maxBuffer: 10 * 1024 * 1024, timeout: 60_000 })
+        : await execFileAsync(ytDlpBinary, buildCampaignMetadataArgs(url), { maxBuffer: 20 * 1024 * 1024, timeout: 120_000 });
     } catch (error) {
       commandResult = { error };
     }
@@ -240,7 +244,9 @@ async function collectCampaignSource({ source, url, now }) {
     return {
       source,
       status: "completed",
-      metrics: parseCampaignMetadata(metadata, { source, now }),
+      metrics: source === "kick"
+        ? parseKickMetadata(metadata, { now })
+        : parseCampaignMetadata(metadata, { source, now }),
       error: null,
       technicalError: null
     };

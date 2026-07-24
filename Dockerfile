@@ -10,7 +10,7 @@ RUN apt-get update \
     ffmpeg \
     python3 \
     python3-pip \
-  && python3 -m pip install --break-system-packages --no-cache-dir yt-dlp \
+  && python3 -m pip install --break-system-packages --no-cache-dir yt-dlp curl_cffi \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

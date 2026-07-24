@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { SourceMetrics } from "../lib/campaign-analyzer/types";
 import {
   buildCampaignMetadataArgs,
+  buildKickMetadataArgs,
   mergeCampaignSourceResult,
   parseCampaignMetadata,
   parseCampaignMetadataCommandResult,
+  parseKickChannelSlug,
+  parseKickMetadata,
   safeCampaignSourceError
 } from "./campaign-analysis-metadata.mjs";
 
@@ -32,6 +35,55 @@ describe("campaign metadata", () => {
     expect(args).toContain("--playlist-end");
     expect(args).not.toContain("--output");
     expect(args.join(" ")).not.toMatch(/--format|write-thumbnail|write-subs/);
+  });
+
+  it("builds a metadata-only Kick VOD command from a public channel URL", () => {
+    expect(parseKickChannelSlug("https://kick.com/restt")).toBe("restt");
+    expect(parseKickChannelSlug("https://kick.com/restt/videos")).toBe("restt");
+    expect(() => parseKickChannelSlug("https://kick.com/categories/games")).toThrow();
+
+    const args = buildKickMetadataArgs("https://kick.com/restt/videos");
+    expect(args).toEqual(["workers/kick-vod-metadata.py", "restt"]);
+    expect(args.join(" ")).not.toMatch(/download|playlist|manifest|m3u8/i);
+  });
+
+  it("normalizes Kick API v2 videos without treating a live session as a VOD", () => {
+    const value = [
+      {
+        id: 1,
+        created_at: "2026-07-20T12:00:00.000Z",
+        duration: 3_600_000,
+        views: 1200,
+        is_live: false,
+        video: { views: 1250 }
+      },
+      {
+        id: 2,
+        start_time: "2026-07-10T12:00:00.000Z",
+        duration: 1_800_000,
+        views: null,
+        is_live: false,
+        video: { views: 750 }
+      },
+      {
+        id: 3,
+        created_at: "2026-07-21T11:00:00.000Z",
+        duration: 900,
+        views: 9999,
+        is_live: true
+      }
+    ];
+
+    expect(parseKickMetadata(value, { now })).toEqual({
+      item_count: 2,
+      total_duration_seconds: 5400,
+      average_views: 1000,
+      median_views: 1000,
+      top_views: 1250,
+      sample_size: 2,
+      shorts_median_views: null,
+      shorts_sample_size: 0
+    });
   });
 
   it("uses only dated entries in the trailing 30-day UTC window", () => {
@@ -88,6 +140,10 @@ describe("campaign metadata", () => {
     const commandError = Object.assign(new Error("extractor failed"), { stdout: "" });
 
     expect(() => parseCampaignMetadataCommandResult({ error: commandError })).toThrow("extractor failed");
+  });
+
+  it("returns an empty entry set when a successful channel query has no items in the window", () => {
+    expect(parseCampaignMetadataCommandResult({ stdout: "" })).toEqual({ entries: [] });
   });
 
   it("does not treat yt-dlp null output as successful source metadata", () => {

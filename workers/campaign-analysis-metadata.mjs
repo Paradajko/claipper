@@ -10,6 +10,40 @@ export function buildCampaignMetadataArgs(url) {
   ];
 }
 
+export function parseKickChannelSlug(value) {
+  const url = new URL(value);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const reserved = new Set(["categories", "dashboard", "following", "search"]);
+  const slug = parts[0];
+  if (
+    url.protocol !== "https:" ||
+    !["kick.com", "www.kick.com"].includes(url.hostname.toLowerCase()) ||
+    !slug ||
+    reserved.has(slug.toLowerCase()) ||
+    !/^[a-zA-Z0-9_-]+$/.test(slug) ||
+    (parts.length > 1 && (parts.length !== 2 || parts[1] !== "videos"))
+  ) {
+    throw new Error("Kick URL must identify a public channel.");
+  }
+  return slug;
+}
+
+export function buildKickMetadataArgs(url) {
+  return ["workers/kick-vod-metadata.py", parseKickChannelSlug(url)];
+}
+
+export function parseKickMetadata(value, { now = new Date() } = {}) {
+  if (!Array.isArray(value)) throw new Error("Kick returned invalid VOD metadata.");
+  const entries = value
+    .filter((entry) => entry && typeof entry === "object" && entry.is_live !== true)
+    .map((entry) => ({
+      timestamp: isoTimestamp(entry.created_at ?? entry.start_time),
+      duration: kickDurationSeconds(entry.duration),
+      view_count: entry.video?.views ?? entry.views
+    }));
+  return parseCampaignMetadata({ entries }, { source: "kick", now });
+}
+
 export function parseCampaignMetadata(value, { source, now = new Date() }) {
   const cutoffMs = now.getTime() - 30 * 24 * 60 * 60 * 1000;
   const entries = flattenEntries(value)
@@ -59,6 +93,7 @@ export function parseCampaignMetadataCommandResult({ stdout, error }) {
     }
   }
   if (error) throw error;
+  if (typeof stdout === "string") return { entries: [] };
   throw new Error("yt-dlp returned no metadata.");
 }
 
@@ -116,6 +151,11 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function kickDurationSeconds(value) {
+  const durationMs = finiteNumber(value);
+  return durationMs === null ? null : durationMs / 1000;
+}
+
 function uploadDateMs(value) {
   if (typeof value !== "string" || !/^\d{8}$/.test(value)) return null;
   const year = Number(value.slice(0, 4));
@@ -124,6 +164,12 @@ function uploadDateMs(value) {
   const result = Date.UTC(year, month - 1, day);
   const date = new Date(result);
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? result : null;
+}
+
+function isoTimestamp(value) {
+  if (typeof value !== "string") return null;
+  const timestampMs = Date.parse(value);
+  return Number.isFinite(timestampMs) ? timestampMs / 1000 : null;
 }
 
 function isShort(entry) {

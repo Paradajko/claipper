@@ -16,6 +16,13 @@ describe("campaign analysis worker integration", () => {
     expect(worker).not.toContain("processCampaignAnalysis(job, { download");
   });
 
+  it("uses the public Kick VOD metadata helper instead of the live-only yt-dlp extractor", () => {
+    expect(worker).toContain('source === "kick"');
+    expect(worker).toContain("buildKickMetadataArgs");
+    expect(worker).toContain("parseKickMetadata");
+    expect(worker).toContain('execFileAsync("python3", buildKickMetadataArgs(url)');
+  });
+
   it("isolates all three source attempts and preserves stale data", () => {
     for (const source of ["youtube", "kick", "clipper"]) expect(worker).toContain(`source: "${source}"`);
     expect(worker).toContain("collectCampaignSource");
