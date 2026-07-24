@@ -1,0 +1,3 @@
+-- The hosted Claipper project already records migration version 007.
+-- Its schema is represented by migrations 001-006 in this repository.
+-- Keep this no-op placeholder so local and remote migration histories remain aligned.
