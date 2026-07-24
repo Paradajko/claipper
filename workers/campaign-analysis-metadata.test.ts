@@ -31,7 +31,7 @@ describe("campaign metadata", () => {
     const args = buildCampaignMetadataArgs("https://youtube.com/@creator");
     expect(args).toContain("--skip-download");
     expect(args).toContain("--print");
-    expect(args).toContain("--dateafter");
+    expect(args).not.toContain("--dateafter");
     expect(args).toContain("--playlist-end");
     expect(args).not.toContain("--output");
     expect(args.join(" ")).not.toMatch(/--format|write-thumbnail|write-subs/);

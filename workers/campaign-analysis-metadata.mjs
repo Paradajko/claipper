@@ -3,7 +3,6 @@ export function buildCampaignMetadataArgs(url) {
     "--skip-download",
     "--ignore-errors",
     "--no-warnings",
-    "--dateafter", "now-30days",
     "--playlist-end", "100",
     "--print", "%(.{id,timestamp,release_timestamp,upload_date,duration,view_count,webpage_url,is_short,is_shorts,short,extractor_key,extractor})j",
     "--", url
