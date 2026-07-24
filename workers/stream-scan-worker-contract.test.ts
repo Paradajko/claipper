@@ -2,10 +2,22 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const worker = readFileSync("workers/stream-scan-worker.mjs", "utf8");
+const aiProvider = readFileSync("workers/ai-provider.mjs", "utf8");
 const atomicRenderMigration = readFileSync("supabase/migrations/007_atomic_ready_clip_queue.sql", "utf8");
 const dockerfile = readFileSync("Dockerfile", "utf8");
 
 describe("ready render worker contract", () => {
+  it("uses Gemini for Moment Finder text and OpenAI only for transcription", () => {
+    expect(worker).toContain("resolveMomentAiConfig");
+    expect(worker).toContain("momentAi.chat.completions.create");
+    expect(aiProvider).toContain("GEMINI_MODEL");
+    expect(worker).toContain("GEMINI_API_KEY");
+    expect(worker).toContain("https://api.openai.com/v1/audio/transcriptions");
+    expect(worker).toContain("OPENAI_TRANSCRIBE_MODEL");
+    expect(worker).not.toContain("OPENAI_MODEL");
+    expect(worker).not.toContain("openai.chat.completions.create");
+  });
+
   it("uses the deterministic production module and FFprobe before upload", () => {
     for (const symbol of [
       "normalizeEditPlan",

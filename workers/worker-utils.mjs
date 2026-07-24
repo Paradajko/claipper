@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 const baseRequiredWorkerEnv = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
+  "GEMINI_API_KEY",
   "OPENAI_API_KEY",
   "WORKER_ID",
   "WORKER_POLL_INTERVAL_MS"
@@ -103,12 +104,13 @@ export function hasFfmpegSubtitleFilter(output) {
   return /^\s*[.A-Z]{2,3}\s+subtitles\s+/m.test(String(output ?? ""));
 }
 
-export function formatStartupReport({ workerId, supabaseConnected, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment, storageMode = "cloud", localStorageRoot = null }) {
+export function formatStartupReport({ workerId, supabaseConnected, geminiPresent, geminiModel, openAiPresent, ffmpeg, ffprobe, ytdlp, buckets, pollIntervalMs, environment, storageMode = "cloud", localStorageRoot = null }) {
   return [
     "Claipper Stream Scan Worker",
     `Worker ID: ${workerId}`,
     `Supabase: ${supabaseConnected ? "connected" : "missing"}`,
-    `OpenAI key: ${openAiPresent ? "present" : "missing"}`,
+    `Gemini text AI: ${geminiPresent ? `present (${geminiModel})` : "missing"}`,
+    `OpenAI transcription key: ${openAiPresent ? "present" : "missing"}`,
     `FFmpeg: ${ffmpeg.ok ? "available" : `missing (${ffmpeg.binary})`}`,
     `FFprobe: ${ffprobe.ok ? "available" : `missing (${ffprobe.binary})`}`,
     `Storage mode: ${storageMode}`,

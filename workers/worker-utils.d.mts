@@ -35,6 +35,8 @@ export function hasFfmpegSubtitleFilter(output: string): boolean;
 export function formatStartupReport(input: {
   workerId: string;
   supabaseConnected: boolean;
+  geminiPresent: boolean;
+  geminiModel: string;
   openAiPresent: boolean;
   ffmpeg: { ok: boolean; binary: string };
   ffprobe: { ok: boolean; binary: string };

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { resolveMomentAiConfig } from "./ai-provider.mjs";
 import { downloadOriginalVideo, normalizeOriginalStorageProvider, uploadOriginalVideo } from "./object-storage.mjs";
 import { buildAudioChunkPlan, mergeVerboseTranscripts } from "./audio-chunks.mjs";
 import { buildChatWindows } from "./kick-chat.mjs";
@@ -68,7 +69,11 @@ const buckets = {
 };
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const momentAiConfig = resolveMomentAiConfig();
+const momentAi = new OpenAI({
+  apiKey: momentAiConfig.apiKey,
+  baseURL: momentAiConfig.baseURL
+});
 let activeJobId = null;
 let activeStep = "idle";
 
@@ -565,8 +570,8 @@ async function refineTimingWithAi(clip, contextSegments, contextStart, contextEn
     .join("\n")
     .slice(0, 9000);
 
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  const completion = await momentAi.chat.completions.create({
+    model: momentAiConfig.model,
     response_format: { type: "json_object" },
     messages: [
       {
@@ -1053,8 +1058,8 @@ async function transcribeAudio(audioPath) {
 
 async function analyzeTranscriptSegment(segment, chatWindows = []) {
   const chatSummary = chatPromptForRange(chatWindows, segment.start_time, segment.end_time);
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  const completion = await momentAi.chat.completions.create({
+    model: momentAiConfig.model,
     response_format: { type: "json_object" },
     messages: [
       {
@@ -1086,9 +1091,9 @@ async function rankCandidatesWithAi(candidates, chatWindows = [], transcriptItem
     applyChatSignalsToCandidate(candidate, chatWindows, transcriptItems)
   );
   const locallyRanked = rankClipCandidates(signaledCandidates, 8);
-  if (locallyRanked.length <= 1 || !openai) return locallyRanked;
-  const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  if (locallyRanked.length <= 1) return locallyRanked;
+  const completion = await momentAi.chat.completions.create({
+    model: momentAiConfig.model,
     response_format: { type: "json_object" },
     messages: [
       {
@@ -1120,8 +1125,8 @@ async function verifyCandidateTiming(candidate, transcriptItems, transcriptWords
   if (context.length === 0) return fallback;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+    const completion = await momentAi.chat.completions.create({
+      model: momentAiConfig.model,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -1812,6 +1817,8 @@ async function startupChecks() {
     formatStartupReport({
       workerId,
       supabaseConnected,
+      geminiPresent: Boolean(process.env.GEMINI_API_KEY),
+      geminiModel: momentAiConfig.model,
       openAiPresent: Boolean(process.env.OPENAI_API_KEY),
       ffmpeg,
       ffprobe,

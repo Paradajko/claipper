@@ -64,7 +64,8 @@ The ready output should be a playable 1080x1920 H.264/AAC MP4. The UI should off
 - Invalid token: make the browser token match `CLAIPPER_LOCAL_AGENT_TOKEN`.
 - Worker offline: inspect the `worker` process in the combined terminal output.
 - FFmpeg/FFprobe missing: install FFmpeg or set absolute binary paths.
-- OpenAI failure: verify `OPENAI_API_KEY` and inspect `processing_jobs.technical_error`.
+- Moment analysis failure: verify `GEMINI_API_KEY` and `GEMINI_MODEL`, then inspect `processing_jobs.technical_error`.
+- Transcription failure: verify `OPENAI_API_KEY` and `OPENAI_TRANSCRIBE_MODEL`, then inspect `processing_jobs.technical_error`.
 - No moments: inspect the saved transcript before changing ranking thresholds.
 
 ## Current manual scope

@@ -4,6 +4,7 @@ import { formatLastSeen, formatStartupReport, hasFfmpegSubtitleFilter, isHeartbe
 const validEnv = {
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "service-role",
+  GEMINI_API_KEY: "gemini",
   OPENAI_API_KEY: "openai",
   STORAGE_BUCKET_ORIGINALS: "original-videos",
   STORAGE_BUCKET_AUDIO: "extracted-audio",
@@ -19,6 +20,7 @@ describe("worker utils", () => {
     expect(result.ok).toBe(false);
     expect(result.missing).toContain("NEXT_PUBLIC_SUPABASE_URL");
     expect(result.missing).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(result.missing).toContain("GEMINI_API_KEY");
     expect(result.missing).toContain("OPENAI_API_KEY");
     expect(result.missing).toContain("WORKER_ID");
   });
@@ -34,6 +36,7 @@ describe("worker utils", () => {
     const result = validateWorkerEnv({
       NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      GEMINI_API_KEY: "gemini",
       OPENAI_API_KEY: "openai",
       WORKER_ID: "mac-worker",
       WORKER_POLL_INTERVAL_MS: "3000",
@@ -52,6 +55,7 @@ describe("worker utils", () => {
     const result = validateWorkerEnv({
       NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      GEMINI_API_KEY: "gemini",
       OPENAI_API_KEY: "openai",
       WORKER_ID: "mac-worker",
       WORKER_POLL_INTERVAL_MS: "3000",
@@ -67,6 +71,8 @@ describe("worker utils", () => {
     const report = formatStartupReport({
       workerId: "local-worker",
       supabaseConnected: true,
+      geminiPresent: true,
+      geminiModel: "gemini-3.6-flash",
       openAiPresent: true,
       ffmpeg: { ok: true, binary: "ffmpeg" },
       ffprobe: { ok: true, binary: "ffprobe" },
@@ -79,6 +85,8 @@ describe("worker utils", () => {
     expect(report).toContain("Claipper Stream Scan Worker");
     expect(report).toContain("Worker ID: local-worker");
     expect(report).toContain("Supabase: connected");
+    expect(report).toContain("Gemini text AI: present (gemini-3.6-flash)");
+    expect(report).toContain("OpenAI transcription key: present");
     expect(report).toContain("FFmpeg: available");
     expect(report).toContain("FFprobe: available");
     expect(report).toContain("yt-dlp: missing (yt-dlp)");
